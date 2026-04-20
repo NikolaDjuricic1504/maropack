@@ -1,34 +1,88 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase.js";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
+// ===================== BAZA MATERIJALA =====================
 const MAT_DATA = {
-  "BOPP": [5,10,15,18,20,25,28,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100,105,110,115,120,125,130].map(d=>({d,t:+(d*0.91).toFixed(2)})),
-  "BOPP SEDEF": [5,10,15,20,25,30,35,38,40,45,60,65,70,75,80,85,90,95,100,105,110,115,120,125,130,135,140].map(d=>({d,t:+(d*0.65).toFixed(2)})),
-  "BOPP BELI": [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100,105,110,115,120,125,130,135].map(d=>({d,t:+(d*0.91).toFixed(2)})),
-  "LDPE": [10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100,105,110,115,120,125,130,135,140].map(d=>({d,t:+(d*0.925).toFixed(2)})),
-  "CPP": [5,10,15,18,20,25,28,30,35,40,45,50,70,75].map(d=>({d,t:+(d*0.91).toFixed(2)})),
-  "PET": [12,15,19,20,21,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58].map(d=>({d,t:+(d*1.4).toFixed(2)})),
-  "OPA": [12,15,20,25,30,35,40,52,58,64,70,76,82,88,94,100,106,112,118,124,130,136,142,148,154,160,166].map((d,i)=>({d,t:i<7?+(d*1.1).toFixed(2):+(d*1.21).toFixed(2)})),
-  "OPP": [5,10,15,18,20,25,30,35,40,45,50,55,60,65,70].map(d=>({d,t:+(d*0.91).toFixed(2)})),
-  "PE": [20,25,30,35,40,45,50,55,60,70,80,90,100,120].map(d=>({d,t:+(d*0.92).toFixed(2)})),
-  "ALU": [6,7,8,9,12,15,20,25,30].map(d=>({d,t:+(d*2.7).toFixed(2)})),
-  "PA/PE koestruzija": [20,25,30,35,40,50,60,70,80,90,100].map(d=>({d,t:+(d*1.0).toFixed(2)})),
-  "Papir sigmakraft": [40,50,60,70,80,90,100,120].map(d=>({d,t:+d.toFixed(2)})),
+  "BOPP": [5,10,15,18,20,25,28,30,35,40,45,50,55,60,65,70].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP SEDEF": [5,10,15,20,25,30,35,38,40,45].map(d=>({d,t:+(d*0.65).toFixed(2)})),
+  "BOPP BELI": [5,10,15,20,25,30,35,40,45,50].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "LDPE": [10,15,20,25,30,35,40,45,50,55,60].map(d=>({d,t:+(d*0.925).toFixed(2)})),
+  "CPP": [5,10,15,18,20,25,28,30,35,40,45,50,55,60].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "PET": [12,15,19,20,21,36,50,150].map(d=>({d,t:+(d*1.4).toFixed(2)})),
+  "OPA": [12,15,20,25,30,35,40].map(d=>({d,t:+(d*1.1).toFixed(2)})),
+  "OPP": [5,10,15,18,20,25,28,30,35,40,45,50].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "PLA": [5,10,15,20,25,30,35,40,45].map(d=>({d,t:+(d*1.24).toFixed(2)})),
+  "HDPE": [5,8,12,15,17,20,25,30,35,40,45,50].map(d=>({d,t:+(d*0.94).toFixed(2)})),
+  "ALU": [7,9,12,15,20,25,30,35,40,45,50].map(d=>({d,t:+(d*2.71).toFixed(2)})),
+  "CELULOZA": [10,15,20,23,28,30,35,40,45,50].map(d=>({d,t:+(d*1.45).toFixed(2)})),
+  "CELOFAN": [10,15,20,23,28,30,35,40,45,50].map(d=>({d,t:+(d*1.45).toFixed(2)})),
+  "PA": [10,15,20,23,28,30,35,40,45,50].map(d=>({d,t:+(d*1.14).toFixed(2)})),
+  "PA/PE koestruzija": [10,15,20,23,28,30,35,40,45,50].map(d=>({d,t:+(d*1.0).toFixed(2)})),
+  "CPP PLC": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "CPP PLCB": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "CPP PLCBZ": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "CPP PLCDF": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "CPP PLCM": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "CPP PLCML": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "CPP PLCMLS": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "CPP PLCBAF": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXC": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCB": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCM": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCMT": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPMT": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCFM": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCW": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPF": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXS": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXA": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXAA": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPA": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPM": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPFM": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPFB": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPLA": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPLF": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPU": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCLS": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCMLS": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCHFM": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXPBR": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCHM": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
+  "BOPP FXCMB": [12,15,18,20,25,30,35,40,45,48,50,60,70,80,90,100].map(d=>({d,t:+(d*0.91).toFixed(2)})),
 };
-const CENE = {"BOPP":3.1,"BOPP SEDEF":3.5,"BOPP BELI":3.2,"LDPE":1.8,"CPP":2.2,"PET":3.5,"OPA":4.0,"OPP":2.9,"PE":1.7,"ALU":7.5,"PA/PE koestruzija":1.8,"Papir sigmakraft":2.7};
+
+const CENE = {
+  "BOPP":3.1,"BOPP SEDEF":3.5,"BOPP BELI":3.2,"LDPE":1.8,"CPP":2.2,
+  "PET":3.5,"OPA":4.0,"OPP":2.9,"PLA":3.8,"HDPE":1.9,"ALU":7.5,
+  "CELULOZA":3.0,"CELOFAN":3.0,"PA":4.2,"PA/PE koestruzija":1.8,
+  "CPP PLC":2.4,"CPP PLCB":2.4,"CPP PLCBZ":2.4,"CPP PLCDF":2.4,
+  "CPP PLCM":2.4,"CPP PLCML":2.4,"CPP PLCMLS":2.4,"CPP PLCBAF":2.4,
+  "BOPP FXC":3.1,"BOPP FXCB":3.1,"BOPP FXCM":3.1,"BOPP FXCMT":3.1,
+  "BOPP FXPMT":3.1,"BOPP FXCFM":3.1,"BOPP FXCW":3.1,"BOPP FXPF":3.1,
+  "BOPP FXS":3.1,"BOPP FXA":3.1,"BOPP FXAA":3.1,"BOPP FXPA":3.1,
+  "BOPP FXPM":3.1,"BOPP FXPFM":3.1,"BOPP FXPFB":3.1,"BOPP FXPLA":3.1,
+  "BOPP FXPLF":3.1,"BOPP FXPU":3.1,"BOPP FXCLS":3.1,"BOPP FXCMLS":3.1,
+  "BOPP FXCHFM":3.1,"BOPP FXPBR":3.1,"BOPP FXCHM":3.1,"BOPP FXCMB":3.1,
+};
+
 const USERS = [
   {id:1,ime:"Admin",uloga:"admin",pass:"admin123"},
-  {id:2,ime:"Marko",uloga:"radnik",pass:"marko123"},
+  {id:2,ime:"Jovana",uloga:"radnik",pass:"jovana123"},
   {id:3,ime:"Jelena",uloga:"radnik",pass:"jelena123"},
-  {id:4,ime:"Stefan",uloga:"radnik",pass:"stefan123"},
-  {id:5,ime:"Ana",uloga:"radnik",pass:"ana123"},
-  {id:6,ime:"Nikola",uloga:"radnik",pass:"nikola123"},
+  {id:4,ime:"Dunja",uloga:"radnik",pass:"dunja123"},
+  {id:5,ime:"Tihana",uloga:"radnik",pass:"tihana123"},
+  {id:6,ime:"Milan",uloga:"radnik",pass:"milan123"},
 ];
+
 const PREVODI = {
   sr:{ponuda:"PONUDA",br:"Broj",dat:"Datum",vaz:"Važi do",kup:"Kupac",adr:"Adresa",kon:"Kontakt",naz:"Naziv proizvoda",kol:"Količina (m)",jc:"Cena €/1000m",uk:"Ukupno €",nap:"Napomena",pot:"Ovlašćeno lice",pdv:"PDV nije uključen",hv:"Hvala na poverenju!",pl:"Plaćanje: 30 dana od fakture."},
   en:{ponuda:"QUOTATION",br:"Number",dat:"Date",vaz:"Valid until",kup:"Customer",adr:"Address",kon:"Contact",naz:"Product name",kol:"Quantity (m)",jc:"Unit price €/1000m",uk:"Total €",nap:"Note",pot:"Authorized person",pdv:"VAT not included",hv:"Thank you for your business!",pl:"Payment: 30 days from invoice."},
   de:{ponuda:"ANGEBOT",br:"Nummer",dat:"Datum",vaz:"Gültig bis",kup:"Kunde",adr:"Adresse",kon:"Kontakt",naz:"Produktname",kol:"Menge (m)",jc:"Einzelpreis €/1000m",uk:"Gesamt €",nap:"Bemerkung",pot:"Bevollmächtigte Person",pdv:"MwSt. nicht enthalten",hv:"Vielen Dank!",pl:"Zahlung: 30 Tage nach Rechnung."},
 };
+
 const BOJE = ["#1d4ed8","#7c3aed","#0891b2","#059669"];
 const SLOJ = ["A","B","C","D"];
 const EM = {tip:"",deb:"",cena:"",stamp:false,kas:0,lak:0};
@@ -59,13 +113,129 @@ function Notif({msg,tip}) {
   );
 }
 
+function PonudaView({t,naziv,kupac,adr,kon,kol,c1,uk,nap,mats,broj,dat,vaz,printRef}) {
+  var f2l = function(v){return isNaN(v)?"—":(+v).toFixed(2).replace(".",",");};
+  return (
+    <div ref={printRef} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:28,fontFamily:"'Segoe UI',serif"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:16,borderBottom:"2px solid #1d4ed8"}}>
+        <div>
+          <div style={{fontSize:24,fontWeight:900,color:"#0f172a"}}>🏭 Maropack</div>
+          <div style={{fontSize:11,color:"#64748b",marginTop:2}}>Fleksibilna ambalaza · Srbija</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:20,fontWeight:800,color:"#1d4ed8"}}>{t.ponuda}</div>
+          {broj && <div style={{fontSize:11,color:"#64748b",marginTop:3}}>{t.br}: <b>{broj}</b></div>}
+          {dat && <div style={{fontSize:11,color:"#64748b"}}>{t.dat}: <b>{dat}</b></div>}
+          {vaz && <div style={{fontSize:11,color:"#64748b"}}>{t.vaz}: <b>{vaz}</b></div>}
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+        <div style={{background:"#f8fafc",borderRadius:8,padding:"12px 14px"}}>
+          <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>{t.kup}</div>
+          <div style={{fontWeight:700,fontSize:13}}>{kupac||"—"}</div>
+          {adr && <div style={{fontSize:11,color:"#64748b",marginTop:2}}>{adr}</div>}
+          {kon && <div style={{fontSize:11,color:"#64748b"}}>{kon}</div>}
+        </div>
+        <div style={{background:"#eff6ff",borderRadius:8,padding:"12px 14px"}}>
+          <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>{t.naz}</div>
+          <div style={{fontWeight:700,fontSize:13}}>{naziv||"—"}</div>
+          {mats && mats.filter(function(m){return m.tip;}).length>0 && (
+            <div style={{fontSize:10,color:"#64748b",marginTop:3}}>{mats.filter(function(m){return m.tip;}).map(function(m){return m.tip+" "+(m.deb||m.debljina)+"µ";}).join(" / ")}</div>
+          )}
+        </div>
+      </div>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,marginBottom:16}}>
+        <thead>
+          <tr style={{background:"#1d4ed8",color:"#fff"}}>
+            <th style={{padding:"9px 10px",textAlign:"left"}}>{t.naz}</th>
+            <th style={{padding:"9px 10px",textAlign:"right"}}>{t.kol}</th>
+            <th style={{padding:"9px 10px",textAlign:"right"}}>{t.jc}</th>
+            <th style={{padding:"9px 10px",textAlign:"right"}}>{t.uk}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style={{borderBottom:"1px solid #e2e8f0"}}>
+            <td style={{padding:"10px"}}>{naziv||"—"}</td>
+            <td style={{padding:"10px",textAlign:"right"}}>{(kol||0).toLocaleString()}</td>
+            <td style={{padding:"10px",textAlign:"right"}}>{f2l(c1)}</td>
+            <td style={{padding:"10px",textAlign:"right",fontWeight:700}}>{f2l(uk)}</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr style={{background:"#f8fafc"}}>
+            <td colSpan={3} style={{padding:"10px",fontWeight:700,textAlign:"right"}}>{t.uk}:</td>
+            <td style={{padding:"10px",fontWeight:900,fontSize:15,textAlign:"right",color:"#1d4ed8"}}>{f2l(uk)} €</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div style={{fontSize:10,color:"#94a3b8",marginBottom:6}}>* {t.pdv}</div>
+      {nap && <div style={{background:"#fffbeb",borderRadius:7,padding:"9px 12px",fontSize:11,color:"#92400e",marginBottom:10}}>📌 {t.nap}: {nap}</div>}
+      <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+        <div style={{fontSize:10,color:"#64748b"}}>{t.pl}</div>
+        <div style={{textAlign:"center"}}>
+          <div style={{width:100,borderTop:"1px solid #0f172a",paddingTop:4,fontSize:10,color:"#64748b"}}>{t.pot}</div>
+        </div>
+      </div>
+      <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>{t.hv}</div>
+    </div>
+  );
+}
+
+function PrintA4({data, onClose}) {
+  const nalog = data.nalog;
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(data.link);
+  const isPdf = /\.pdf$/i.test(data.link);
+  function print() { window.print(); }
+  return (
+    <>
+      <style>{`@media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; left: 0; top: 0; width: 210mm; min-height: 297mm; } .no-print { display: none !important; } }`}</style>
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20,overflow:"auto"}}>
+        <div style={{background:"#fff",borderRadius:12,maxWidth:900,width:"100%",maxHeight:"95vh",overflow:"auto",display:"flex",flexDirection:"column"}}>
+          <div className="no-print" style={{padding:"14px 20px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:"#fff",zIndex:1}}>
+            <div style={{fontWeight:700,fontSize:14}}>A4 prikaz za štampu - {data.naz}</div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={print} style={{padding:"8px 18px",borderRadius:8,border:"none",background:data.col,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>🖨️ Štampaj</button>
+              <button onClick={onClose} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>✕ Zatvori</button>
+            </div>
+          </div>
+          <div className="print-area" style={{padding:"20mm 15mm",fontFamily:"'Segoe UI',system-ui,sans-serif",color:"#0f172a",width:"100%",boxSizing:"border-box",background:"#fff"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",paddingBottom:16,borderBottom:"3px solid "+data.col,marginBottom:20}}>
+              <div>
+                <div style={{fontSize:28,fontWeight:900,letterSpacing:-0.5}}>🏭 Maropack</div>
+                <div style={{fontSize:11,color:"#64748b",marginTop:2}}>Fleksibilna ambalaža</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:18,fontWeight:800,color:data.col}}>{data.ik} {data.naz.toUpperCase()}</div>
+                <div style={{fontSize:11,color:"#64748b",marginTop:4}}>{new Date().toLocaleDateString("sr-RS")}</div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20}}>
+              {[["Broj naloga",nalog.ponBr||"—"],["Kupac",nalog.kupac||"—"],["Proizvod",nalog.prod||nalog.naziv||"—"]].map(function(x){
+                return <div key={x[0]} style={{background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}><div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>{x[0]}</div><div style={{fontSize:14,fontWeight:700}}>{x[1]}</div></div>;
+              })}
+            </div>
+            <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",background:"#fafafa"}}>
+              {isImage && <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:400}}><img src={data.link} alt={data.naz} style={{maxWidth:"100%",maxHeight:"180mm",display:"block"}}/></div>}
+              {isPdf && <iframe src={data.link} style={{width:"100%",height:"180mm",border:"none"}} title={data.naz}/>}
+              {!isImage && !isPdf && <div style={{padding:40,textAlign:"center",color:"#64748b"}}><div style={{fontSize:40,marginBottom:10}}>📄</div><a href={data.link} target="_blank" rel="noopener" style={{color:data.col}}>Otvori dokument u novom tabu</a></div>}
+            </div>
+            <div style={{marginTop:20,display:"flex",justifyContent:"space-between",fontSize:10,color:"#64748b"}}>
+              <div>Radnik: _____________________</div>
+              <div>Potpis: _____________________</div>
+              <div>Datum: {new Date().toLocaleDateString("sr-RS")}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dash");
   const [db, setDb] = useState({proizvodi:[],ponude:[],nalozi:[]});
   const [notif, setNotif] = useState(null);
-
-  // Login
   const [lIme, setLIme] = useState("");
   const [lPass, setLPass] = useState("");
   const [lErr, setLErr] = useState("");
@@ -73,6 +243,7 @@ export default function App() {
   // Kalkulator
   const [mats, setMats] = useState([Object.assign({},EM)]);
   const [naziv, setNaziv] = useState("");
+  const [kupacKalk, setKupacKalk] = useState(""); // NOVO: kupac u kalkulaciji
   const [sir, setSir] = useState(85);
   const [met, setMet] = useState(1000);
   const [nal, setNal] = useState(120);
@@ -90,7 +261,7 @@ export default function App() {
   const [ktab, setKtab] = useState("unos");
   const [res, setRes] = useState(null);
 
-  // Ponuda forma
+  // Ponuda
   const [pkupac, setPkupac] = useState("");
   const [padr, setPadr] = useState("");
   const [pkon, setPkon] = useState("");
@@ -98,18 +269,37 @@ export default function App() {
   const [pjez, setPjez] = useState("sr");
   const [aktivna, setAktivna] = useState(null);
 
-  // Pregled
   const [pregNalog, setPregNalog] = useState(null);
   const [pregPonuda, setPregPonuda] = useState(null);
-  const [stampa, setStampa] = useState(null); // {nalog, tip: 'pdf'|'perforacija'|'kesa'}
-  const [uploading, setUploading] = useState(null); // id naloga
+  const [stampa, setStampa] = useState(null);
+  const [uploading, setUploading] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const ponudaRef = useRef(null);
+  const pregPonudaRef = useRef(null);
 
   const msg = useCallback(function(m,t) {
     setNotif({msg:m,tip:t||"ok"});
     setTimeout(function(){setNotif(null);},3000);
   },[]);
 
-  // KALKULATOR
+  async function downloadPDF(ref, filename) {
+    if(!ref.current) return;
+    setPdfLoading(true);
+    try {
+      const canvas = await html2canvas(ref.current, {scale:2,useCORS:true,backgroundColor:"#ffffff"});
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = (canvas.height * pdfW) / canvas.width;
+      pdf.addImage(imgData,"PNG",0,0,pdfW,pdfH);
+      pdf.save(filename+".pdf");
+      msg("PDF preuzet!");
+    } catch(e) {
+      msg("Greska pri generisanju PDF-a","err");
+    }
+    setPdfLoading(false);
+  }
+
   const calc = useCallback(function() {
     var vm = mats.filter(function(m){return m.tip && m.deb;});
     if(!vm.length || !sir || !met){setRes(null);return;}
@@ -150,10 +340,8 @@ export default function App() {
 
   useEffect(function(){calc();},[calc]);
 
-  // SUPABASE - ucitavanje i real-time sync
   useEffect(function(){
     if(!user) return;
-    // Inicijalno ucitavanje
     async function loadData(){
       try {
         const [p, po, na] = await Promise.all([
@@ -161,23 +349,16 @@ export default function App() {
           supabase.from('ponude').select('*').order('created_at',{ascending:false}),
           supabase.from('nalozi').select('*').order('created_at',{ascending:false}),
         ]);
-        setDb({
-          proizvodi: p.data || [],
-          ponude: po.data || [],
-          nalozi: na.data || []
-        });
-      } catch(e) { console.error('Load error:', e); }
+        setDb({proizvodi:p.data||[],ponude:po.data||[],nalozi:na.data||[]});
+      } catch(e){console.error('Load error:',e);}
     }
     loadData();
-
-    // Real-time subscription
     const ch = supabase.channel('maropack-changes')
       .on('postgres_changes',{event:'*',schema:'public',table:'proizvodi'},function(){loadData();})
       .on('postgres_changes',{event:'*',schema:'public',table:'ponude'},function(){loadData();})
       .on('postgres_changes',{event:'*',schema:'public',table:'nalozi'},function(){loadData();})
       .subscribe();
-
-    return function(){ supabase.removeChannel(ch); };
+    return function(){supabase.removeChannel(ch);};
   },[user]);
 
   function updM(i,f,v) {
@@ -194,12 +375,12 @@ export default function App() {
 
   async function sacuvaj() {
     if(!res||!naziv.trim()){msg("Unesite naziv proizvoda!","err");return;}
-    var p={naziv:naziv,sir:sir,met:met,nal:nal,sk:sk,mar:mar,mats:mats.slice(),res:Object.assign({},res),datum:dnow(),ko:user.ime};
+    var p={naziv:naziv,kupac:kupacKalk,sir:sir,met:met,nal:nal,sk:sk,mar:mar,mats:mats.slice(),res:Object.assign({},res),datum:dnow(),ko:user.ime};
     try {
       const {error} = await supabase.from('proizvodi').insert([p]);
       if(error) throw error;
       msg("Proizvod sacuvan!");
-    } catch(e) { msg("Greska: "+e.message,"err"); }
+    } catch(e){msg("Greska: "+e.message,"err");}
   }
 
   async function kreirajPonudu() {
@@ -211,7 +392,7 @@ export default function App() {
       if(error) throw error;
       setAktivna(data[0]);
       msg("Ponuda kreirana!");
-    } catch(e) { msg("Greska: "+e.message,"err"); }
+    } catch(e){msg("Greska: "+e.message,"err");}
   }
 
   async function kreirajNaloge(pon) {
@@ -236,42 +417,41 @@ export default function App() {
       if(e2) throw e2;
       msg("Kreirano "+novi.length+" radnih naloga!");
       setPage("nalozi");
-    } catch(e) { msg("Greska: "+e.message,"err"); }
+    } catch(e){msg("Greska: "+e.message,"err");}
   }
 
   async function updN(id,f,v) {
     try {
       const {error} = await supabase.from('nalozi').update({[f]:v}).eq('id',id);
       if(error) throw error;
-    } catch(e) { msg("Greska: "+e.message,"err"); }
+    } catch(e){msg("Greska: "+e.message,"err");}
   }
 
-  async function uploadFajl(nalogId, tipFajla, file) {
+  async function uploadFajl(nalogId,tipFajla,file) {
     if(!file) return;
     setUploading(nalogId+"_"+tipFajla);
     try {
       const ext = file.name.split('.').pop();
       const path = "nalog_"+nalogId+"/"+tipFajla+"_"+Date.now()+"."+ext;
-      const {error:upErr} = await supabase.storage.from('maropack-files').upload(path, file);
+      const {error:upErr} = await supabase.storage.from('maropack-files').upload(path,file);
       if(upErr) throw upErr;
       const {data:urlData} = supabase.storage.from('maropack-files').getPublicUrl(path);
       const url = urlData.publicUrl;
       const kolona = "link_"+tipFajla;
       const {error:dbErr} = await supabase.from('nalozi').update({[kolona]:url}).eq('id',nalogId);
       if(dbErr) throw dbErr;
-      // Takodje sacuvaj u proizvode (ako proizvod sa tim nazivom postoji)
       msg("Fajl uploadovan!");
-    } catch(e) { msg("Greska upload: "+e.message,"err"); }
+    } catch(e){msg("Greska upload: "+e.message,"err");}
     setUploading(null);
   }
 
-  async function obrisiFajl(nalogId, tipFajla) {
+  async function obrisiFajl(nalogId,tipFajla) {
     try {
       const kolona = "link_"+tipFajla;
       const {error} = await supabase.from('nalozi').update({[kolona]:null}).eq('id',nalogId);
       if(error) throw error;
       msg("Fajl obrisan");
-    } catch(e) { msg("Greska: "+e.message,"err"); }
+    } catch(e){msg("Greska: "+e.message,"err");}
   }
 
   async function odbijPonudu(id) {
@@ -279,21 +459,14 @@ export default function App() {
       const {error} = await supabase.from('ponude').update({status:"Odbijena"}).eq('id',id);
       if(error) throw error;
       msg("Ponuda odbijena");
-    } catch(e) { msg("Greska: "+e.message,"err"); }
+    } catch(e){msg("Greska: "+e.message,"err");}
   }
 
-  // STILOVI
   var inp={width:"100%",padding:"9px 12px",borderRadius:8,border:"1px solid #e2e8f0",fontSize:13,color:"#1e293b",background:"#f8fafc",outline:"none",boxSizing:"border-box"};
   var card={background:"#fff",borderRadius:12,padding:20,boxShadow:"0 1px 3px rgba(0,0,0,0.04)",border:"1px solid #e8edf3"};
   var lbl={fontSize:10,fontWeight:700,color:"#64748b",textTransform:"uppercase",letterSpacing:0.6,marginBottom:4,display:"block"};
-
-  var SBJ = {
-    "Ceka":"#f59e0b","U toku":"#3b82f6","Završeno":"#10b981",
-    "Ceka_bg":"#fffbeb","U toku_bg":"#eff6ff","Završeno_bg":"#f0fdf4"
-  };
-
-  // IKONICE za naloge
-  var ICONS = {"box":"📦","print":"🖨️","link":"🔗","cut":"✂️","circle":"🔵","star":"✨"};
+  var SBJ={"Ceka":"#f59e0b","U toku":"#3b82f6","Završeno":"#10b981","Ceka_bg":"#fffbeb","U toku_bg":"#eff6ff","Završeno_bg":"#f0fdf4"};
+  var ICONS={"box":"📦","print":"🖨️","link":"🔗","cut":"✂️","circle":"🔵","star":"✨"};
 
   // LOGIN
   if(!user) return (
@@ -306,11 +479,11 @@ export default function App() {
         </div>
         <div style={{marginBottom:14}}>
           <label style={lbl}>Korisnicko ime</label>
-          <input style={inp} value={lIme} onChange={function(e){setLIme(e.target.value);}} placeholder="Ime"/>
+          <input style={inp} value={lIme} onChange={function(e){setLIme(e.target.value);}} placeholder="Ime" onKeyDown={function(e){if(e.key==="Enter"){var k=null;for(var i=0;i<USERS.length;i++){if(USERS[i].ime.toLowerCase()===lIme.toLowerCase()&&USERS[i].pass===lPass){k=USERS[i];break;}}if(k){setUser(k);setLErr("");}else{setLErr("Pogresno ime ili lozinka");}}}}/>
         </div>
         <div style={{marginBottom:20}}>
           <label style={lbl}>Lozinka</label>
-          <input style={inp} type="password" value={lPass} onChange={function(e){setLPass(e.target.value);}} placeholder="Lozinka"/>
+          <input style={inp} type="password" value={lPass} onChange={function(e){setLPass(e.target.value);}} placeholder="Lozinka" onKeyDown={function(e){if(e.key==="Enter"){var k=null;for(var i=0;i<USERS.length;i++){if(USERS[i].ime.toLowerCase()===lIme.toLowerCase()&&USERS[i].pass===lPass){k=USERS[i];break;}}if(k){setUser(k);setLErr("");}else{setLErr("Pogresno ime ili lozinka");}}}}/>
         </div>
         {lErr&&<div style={{color:"#ef4444",fontSize:12,marginBottom:12,textAlign:"center"}}>{lErr}</div>}
         <button style={{width:"100%",padding:12,borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}} onClick={function(){
@@ -401,9 +574,7 @@ export default function App() {
                           <td style={{padding:"9px 8px",fontWeight:600,color:"#1d4ed8"}}>{n.ponBr}</td>
                           <td style={{padding:"9px 8px"}}>{n.kupac}</td>
                           <td style={{padding:"9px 8px"}}>{ICONS[n.ik]} {n.naziv}</td>
-                          <td style={{padding:"9px 8px"}}>
-                            <span style={{background:SBJ[n.status+"_bg"]||"#f8fafc",color:SBJ[n.status]||"#64748b",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:11}}>{n.status}</span>
-                          </td>
+                          <td style={{padding:"9px 8px"}}><span style={{background:SBJ[n.status+"_bg"]||"#f8fafc",color:SBJ[n.status]||"#64748b",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:11}}>{n.status}</span></td>
                           <td style={{padding:"9px 8px",color:"#64748b"}}>{n.datum}</td>
                         </tr>
                       );
@@ -433,10 +604,21 @@ export default function App() {
 
             {ktab==="unos" && (
               <div>
+                {/* Naziv i kupac */}
                 <div style={Object.assign({},card,{marginBottom:14})}>
-                  <label style={lbl}>Naziv proizvoda</label>
-                  <input style={Object.assign({},inp,{fontSize:14,fontWeight:600})} value={naziv} onChange={function(e){setNaziv(e.target.value);}} placeholder="npr. BOPP/ALU/PE laminat 85mm"/>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                    <div>
+                      <label style={lbl}>Naziv proizvoda *</label>
+                      <input style={Object.assign({},inp,{fontSize:14,fontWeight:600})} value={naziv} onChange={function(e){setNaziv(e.target.value);}} placeholder="npr. BOPP/ALU/PE laminat 85mm"/>
+                    </div>
+                    <div>
+                      <label style={lbl}>Kupac</label>
+                      <input style={Object.assign({},inp,{fontSize:14})} value={kupacKalk} onChange={function(e){setKupacKalk(e.target.value);}} placeholder="Naziv kupca"/>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Materijali */}
                 <div style={Object.assign({},card,{marginBottom:14})}>
                   <div style={{fontSize:14,fontWeight:700,marginBottom:12,display:"flex",alignItems:"center",flexWrap:"wrap",gap:8}}>
                     🧪 Sastav materijala
@@ -499,6 +681,8 @@ export default function App() {
                   })}
                   {mats.length<4 && <button onClick={addM} style={{width:"100%",padding:10,borderRadius:8,border:"2px dashed #cbd5e1",background:"transparent",color:"#94a3b8",fontSize:13,cursor:"pointer"}}>+ Dodaj sloj</button>}
                 </div>
+
+                {/* Dimenzije */}
                 <div style={Object.assign({},card,{marginBottom:14})}>
                   <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📐 Dimenzije i nalog</div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12}}>
@@ -512,6 +696,7 @@ export default function App() {
                     })}
                   </div>
                 </div>
+
                 {res && (
                   <div style={Object.assign({},card,{background:"linear-gradient(135deg,#eff6ff,#f0fdf4)",border:"1px solid #bfdbfe"})}>
                     <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
@@ -521,7 +706,7 @@ export default function App() {
                       </div>
                       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                         <button style={{padding:"9px 16px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={sacuvaj}>💾 Sacuvaj u bazu</button>
-                        <button style={{padding:"9px 16px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setKtab("pon");}}>📄 Napravi ponudu</button>
+                        <button style={{padding:"9px 16px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setKtab("pon");if(kupacKalk)setPkupac(kupacKalk);}}>📄 Napravi ponudu</button>
                         <button style={{padding:"9px 16px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setKtab("rez");}}>📊 Rezultati</button>
                       </div>
                     </div>
@@ -569,13 +754,18 @@ export default function App() {
                 {res && (
                   <div style={Object.assign({},card,{marginBottom:14,background:"#fafbfc"})}>
                     <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12}}>PREGLED PONUDE</div>
-                    <PonudaView t={PREVODI[pjez]} naziv={naziv} kupac={pkupac} adr={padr} kon={pkon} kol={+nal*1000} c1={res.k1} uk={res.kn} nap={pnap} mats={mats.filter(function(m){return m.tip&&m.deb;})}/>
+                    <PonudaView printRef={ponudaRef} t={PREVODI[pjez]} naziv={naziv} kupac={pkupac} adr={padr} kon={pkon} kol={+nal*1000} c1={res.k1} uk={res.kn} nap={pnap} mats={mats.filter(function(m){return m.tip&&m.deb;})}/>
                   </div>
                 )}
-                <div style={{display:"flex",gap:10}}>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={kreirajPonudu}>📄 Kreiraj ponudu</button>
                   {aktivna && (
-                    <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){kreirajNaloge(aktivna);}}>🔧 Kreiraj radne naloge</button>
+                    <>
+                      <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){kreirajNaloge(aktivna);}}>🔧 Kreiraj radne naloge</button>
+                      <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#dc2626",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:pdfLoading?0.7:1}} onClick={function(){downloadPDF(ponudaRef,"Ponuda-"+aktivna.broj);}}>
+                        {pdfLoading?"⏳ Generisem...":"⬇️ Preuzmi PDF"}
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -628,9 +818,14 @@ export default function App() {
             </div>
             {pregPonuda ? (
               <div>
-                <button onClick={function(){setPregPonuda(null);}} style={{padding:"8px 16px",borderRadius:8,border:"1.5px solid #1d4ed8",background:"transparent",color:"#1d4ed8",cursor:"pointer",fontWeight:700,fontSize:13,marginBottom:14}}>← Nazad</button>
+                <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+                  <button onClick={function(){setPregPonuda(null);}} style={{padding:"8px 16px",borderRadius:8,border:"1.5px solid #1d4ed8",background:"transparent",color:"#1d4ed8",cursor:"pointer",fontWeight:700,fontSize:13}}>← Nazad</button>
+                  <button style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#dc2626",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:pdfLoading?0.7:1}} onClick={function(){downloadPDF(pregPonudaRef,"Ponuda-"+(pregPonuda.broj||""));}}>
+                    {pdfLoading?"⏳ Generisem...":"⬇️ Preuzmi PDF"}
+                  </button>
+                </div>
                 <div style={card}>
-                  <PonudaView t={PREVODI[pregPonuda.jez||"sr"]} naziv={pregPonuda.naziv} kupac={pregPonuda.kupac} adr={pregPonuda.adr} kon={pregPonuda.kon} kol={pregPonuda.kol} c1={pregPonuda.c1} uk={pregPonuda.uk} nap={pregPonuda.nap} mats={pregPonuda.mats} broj={pregPonuda.broj} dat={pregPonuda.datum} vaz={pregPonuda.vaz}/>
+                  <PonudaView printRef={pregPonudaRef} t={PREVODI[pregPonuda.jez||"sr"]} naziv={pregPonuda.naziv} kupac={pregPonuda.kupac} adr={pregPonuda.adr} kon={pregPonuda.kon} kol={pregPonuda.kol} c1={pregPonuda.c1} uk={pregPonuda.uk} nap={pregPonuda.nap} mats={pregPonuda.mats} broj={pregPonuda.broj} dat={pregPonuda.datum} vaz={pregPonuda.vaz}/>
                   {pregPonuda.status==="Aktivna" && (
                     <div style={{marginTop:18,paddingTop:18,borderTop:"1px solid #e2e8f0",display:"flex",gap:10}}>
                       <button style={{padding:"10px 18px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){kreirajNaloge(pregPonuda);setPregPonuda(null);}}>🔧 Odobri i kreiraj naloge</button>
@@ -725,8 +920,6 @@ export default function App() {
                       })}
                     </div>
                   )}
-
-                  {/* UPLOAD FAJLOVA */}
                   <div style={{marginTop:20,paddingTop:16,borderTop:"1px solid #e2e8f0"}}>
                     <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>📎 Dokumenti naloga</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
@@ -735,8 +928,8 @@ export default function App() {
                         {tip:"perforacija",naz:"Perforacija",ik:"⚫",col:"#7c3aed"},
                         {tip:"kesa",naz:"Izgled kese",ik:"🛍️",col:"#059669"},
                       ].map(function(f){
-                        var link = pregNalog["link_"+f.tip];
-                        var upId = pregNalog.id+"_"+f.tip;
+                        var link=pregNalog["link_"+f.tip];
+                        var upId=pregNalog.id+"_"+f.tip;
                         return (
                           <div key={f.tip} style={{background:link?f.col+"08":"#f8fafc",border:"1.5px solid "+(link?f.col+"40":"#e2e8f0"),borderRadius:10,padding:12}}>
                             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
@@ -754,10 +947,9 @@ export default function App() {
                             ) : (
                               <label style={{display:"block",cursor:"pointer"}}>
                                 <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{display:"none"}} onChange={function(e){
-                                  var file = e.target.files[0];
+                                  var file=e.target.files[0];
                                   if(file){
-                                    uploadFajl(pregNalog.id, f.tip, file).then(function(){
-                                      // Osvezi pregledNalog iz db
+                                    uploadFajl(pregNalog.id,f.tip,file).then(function(){
                                       setTimeout(function(){
                                         supabase.from('nalozi').select('*').eq('id',pregNalog.id).single().then(function(r){
                                           if(r.data) setPregNalog(r.data);
@@ -767,7 +959,7 @@ export default function App() {
                                   }
                                 }}/>
                                 <div style={{padding:"8px 10px",borderRadius:6,border:"2px dashed #cbd5e1",textAlign:"center",fontSize:11,color:"#64748b"}}>
-                                  {uploading===upId ? "⏳ Upload..." : "+ Dodaj fajl"}
+                                  {uploading===upId?"⏳ Upload...":"+ Dodaj fajl"}
                                 </div>
                                 <div style={{fontSize:9,color:"#94a3b8",marginTop:4,textAlign:"center"}}>PDF, JPG, PNG</div>
                               </label>
@@ -787,7 +979,7 @@ export default function App() {
             ) : (
               <div>
                 {(function(){
-                  var grupe = {};
+                  var grupe={};
                   db.nalozi.forEach(function(n){if(!grupe[n.ponBr])grupe[n.ponBr]=[];grupe[n.ponBr].push(n);});
                   return Object.keys(grupe).map(function(br){
                     var gr=grupe[br];
@@ -842,20 +1034,21 @@ export default function App() {
               <div style={card}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                   <thead><tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Naziv","Struktura","Sirina","Cena/1000m","Datum","Ko",""].map(function(h){return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;})}
+                    {["Naziv","Kupac","Struktura","Sirina","Cena/1000m","Datum","Ko",""].map(function(h){return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;})}
                   </tr></thead>
                   <tbody>
                     {db.proizvodi.map(function(p){
                       return (
                         <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9"}}>
                           <td style={{padding:"9px 8px",fontWeight:700}}>{p.naziv}</td>
-                          <td style={{padding:"9px 8px",color:"#64748b",fontSize:11}}>{p.mats.filter(function(m){return m.tip;}).map(function(m){return m.tip+" "+m.deb+"µ";}).join(" / ")}</td>
+                          <td style={{padding:"9px 8px",color:"#64748b"}}>{p.kupac||"—"}</td>
+                          <td style={{padding:"9px 8px",color:"#64748b",fontSize:11}}>{(p.mats||[]).filter(function(m){return m.tip;}).map(function(m){return m.tip+" "+m.deb+"µ";}).join(" / ")}</td>
                           <td style={{padding:"9px 8px"}}>{p.sir} mm</td>
-                          <td style={{padding:"9px 8px",fontWeight:700,color:"#1d4ed8"}}>{eu(p.res.k1)}</td>
+                          <td style={{padding:"9px 8px",fontWeight:700,color:"#1d4ed8"}}>{eu(p.res&&p.res.k1)}</td>
                           <td style={{padding:"9px 8px",color:"#64748b"}}>{p.datum}</td>
                           <td style={{padding:"9px 8px",color:"#64748b"}}>{p.ko}</td>
                           <td style={{padding:"9px 8px"}}>
-                            <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setNaziv(p.naziv);setMats(p.mats);setSir(p.sir);setMet(p.met);setNal(p.nal);setSk(p.sk);setMar(p.mar);setPage("kalk");setKtab("unos");msg("Proizvod ucitan!");}}>Ucitaj</button>
+                            <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setNaziv(p.naziv);setKupacKalk(p.kupac||"");setMats(p.mats);setSir(p.sir);setMet(p.met);setNal(p.nal);setSk(p.sk);setMar(p.mar);setPage("kalk");setKtab("unos");msg("Proizvod ucitan!");}}>Ucitaj</button>
                           </td>
                         </tr>
                       );
@@ -882,9 +1075,7 @@ export default function App() {
                     return (
                       <tr key={u.id} style={{borderBottom:"1px solid #f1f5f9"}}>
                         <td style={{padding:"10px 8px",fontWeight:600}}>{u.ime}</td>
-                        <td style={{padding:"10px 8px"}}>
-                          <span style={{background:u.uloga==="admin"?"#fef3c7":"#dbeafe",color:u.uloga==="admin"?"#92400e":"#1e40af",borderRadius:6,padding:"2px 10px",fontWeight:700,fontSize:11}}>{u.uloga==="admin"?"Administrator":"Radnik"}</span>
-                        </td>
+                        <td style={{padding:"10px 8px"}}><span style={{background:u.uloga==="admin"?"#fef3c7":"#dbeafe",color:u.uloga==="admin"?"#92400e":"#1e40af",borderRadius:6,padding:"2px 10px",fontWeight:700,fontSize:11}}>{u.uloga==="admin"?"Administrator":"Radnik"}</span></td>
                         <td style={{padding:"10px 8px",fontFamily:"monospace",color:"#94a3b8"}}>{u.pass}</td>
                       </tr>
                     );
@@ -896,165 +1087,6 @@ export default function App() {
         )}
 
       </div>
-    </div>
-  );
-}
-
-function PrintA4({data, onClose}) {
-  const nalog = data.nalog;
-  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(data.link);
-  const isPdf = /\.pdf$/i.test(data.link);
-
-  function print() {
-    window.print();
-  }
-
-  return (
-    <>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .print-area, .print-area * { visibility: visible; }
-          .print-area { position: absolute; left: 0; top: 0; width: 210mm; min-height: 297mm; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
-      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20,overflow:"auto"}}>
-        <div style={{background:"#fff",borderRadius:12,maxWidth:900,width:"100%",maxHeight:"95vh",overflow:"auto",display:"flex",flexDirection:"column"}}>
-          {/* Header - skriven pri stampanju */}
-          <div className="no-print" style={{padding:"14px 20px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:"#fff",zIndex:1}}>
-            <div style={{fontWeight:700,fontSize:14}}>A4 prikaz za štampu - {data.naz}</div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={print} style={{padding:"8px 18px",borderRadius:8,border:"none",background:data.col,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>🖨️ Štampaj</button>
-              <button onClick={onClose} style={{padding:"8px 14px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>✕ Zatvori</button>
-            </div>
-          </div>
-
-          {/* A4 sadržaj */}
-          <div className="print-area" style={{padding:"20mm 15mm",fontFamily:"'Segoe UI',system-ui,sans-serif",color:"#0f172a",width:"100%",boxSizing:"border-box",background:"#fff"}}>
-            {/* Zaglavlje */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",paddingBottom:16,borderBottom:"3px solid "+data.col,marginBottom:20}}>
-              <div>
-                <div style={{fontSize:28,fontWeight:900,letterSpacing:-0.5}}>🏭 Maropack</div>
-                <div style={{fontSize:11,color:"#64748b",marginTop:2}}>Fleksibilna ambalaža</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:18,fontWeight:800,color:data.col}}>{data.ik} {data.naz.toUpperCase()}</div>
-                <div style={{fontSize:11,color:"#64748b",marginTop:4}}>{new Date().toLocaleDateString("sr-RS")}</div>
-              </div>
-            </div>
-
-            {/* Podaci */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20}}>
-              <div style={{background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
-                <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Broj naloga</div>
-                <div style={{fontSize:16,fontWeight:900,color:data.col}}>{nalog.ponBr||"—"}</div>
-              </div>
-              <div style={{background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
-                <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Kupac</div>
-                <div style={{fontSize:14,fontWeight:700}}>{nalog.kupac||"—"}</div>
-              </div>
-              <div style={{background:"#f8fafc",borderRadius:8,padding:"10px 14px",border:"1px solid #e2e8f0"}}>
-                <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Proizvod</div>
-                <div style={{fontSize:14,fontWeight:700}}>{nalog.prod||nalog.naziv||"—"}</div>
-              </div>
-            </div>
-
-            {/* Dokument */}
-            <div style={{border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",background:"#fafafa"}}>
-              {isImage && (
-                <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:400}}>
-                  <img src={data.link} alt={data.naz} style={{maxWidth:"100%",maxHeight:"180mm",display:"block"}}/>
-                </div>
-              )}
-              {isPdf && (
-                <iframe src={data.link} style={{width:"100%",height:"180mm",border:"none"}} title={data.naz}/>
-              )}
-              {!isImage && !isPdf && (
-                <div style={{padding:40,textAlign:"center",color:"#64748b"}}>
-                  <div style={{fontSize:40,marginBottom:10}}>📄</div>
-                  <a href={data.link} target="_blank" rel="noopener" style={{color:data.col}}>Otvori dokument u novom tabu</a>
-                </div>
-              )}
-            </div>
-
-            {/* Potpis sekcija */}
-            <div style={{marginTop:20,display:"flex",justifyContent:"space-between",fontSize:10,color:"#64748b"}}>
-              <div>Radnik: _____________________</div>
-              <div>Potpis: _____________________</div>
-              <div>Datum: {new Date().toLocaleDateString("sr-RS")}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function PonudaView({t,naziv,kupac,adr,kon,kol,c1,uk,nap,mats,broj,dat,vaz}) {
-  var f2l = function(v){return isNaN(v)?"—":(+v).toFixed(2).replace(".",",");};
-  return (
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:28,fontFamily:"'Segoe UI',serif"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:16,borderBottom:"2px solid #1d4ed8"}}>
-        <div>
-          <div style={{fontSize:24,fontWeight:900,color:"#0f172a"}}>🏭 Maropack</div>
-          <div style={{fontSize:11,color:"#64748b",marginTop:2}}>Fleksibilna ambalaza · Srbija</div>
-        </div>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:20,fontWeight:800,color:"#1d4ed8"}}>{t.ponuda}</div>
-          {broj && <div style={{fontSize:11,color:"#64748b",marginTop:3}}>{t.br}: <b>{broj}</b></div>}
-          {dat && <div style={{fontSize:11,color:"#64748b"}}>{t.dat}: <b>{dat}</b></div>}
-          {vaz && <div style={{fontSize:11,color:"#64748b"}}>{t.vaz}: <b>{vaz}</b></div>}
-        </div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
-        <div style={{background:"#f8fafc",borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>{t.kup}</div>
-          <div style={{fontWeight:700,fontSize:13}}>{kupac||"—"}</div>
-          {adr && <div style={{fontSize:11,color:"#64748b",marginTop:2}}>{adr}</div>}
-          {kon && <div style={{fontSize:11,color:"#64748b"}}>{kon}</div>}
-        </div>
-        <div style={{background:"#eff6ff",borderRadius:8,padding:"12px 14px"}}>
-          <div style={{fontSize:9,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>{t.naz}</div>
-          <div style={{fontWeight:700,fontSize:13}}>{naziv||"—"}</div>
-          {mats && mats.filter(function(m){return m.tip;}).length>0 && (
-            <div style={{fontSize:10,color:"#64748b",marginTop:3}}>{mats.filter(function(m){return m.tip;}).map(function(m){return m.tip+" "+(m.deb||m.debljina)+"µ";}).join(" / ")}</div>
-          )}
-        </div>
-      </div>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,marginBottom:16}}>
-        <thead>
-          <tr style={{background:"#1d4ed8",color:"#fff"}}>
-            <th style={{padding:"9px 10px",textAlign:"left"}}>{t.naz}</th>
-            <th style={{padding:"9px 10px",textAlign:"right"}}>{t.kol}</th>
-            <th style={{padding:"9px 10px",textAlign:"right"}}>{t.jc}</th>
-            <th style={{padding:"9px 10px",textAlign:"right"}}>{t.uk}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style={{borderBottom:"1px solid #e2e8f0"}}>
-            <td style={{padding:"10px"}}>{naziv||"—"}</td>
-            <td style={{padding:"10px",textAlign:"right"}}>{(kol||0).toLocaleString()}</td>
-            <td style={{padding:"10px",textAlign:"right"}}>{f2l(c1)}</td>
-            <td style={{padding:"10px",textAlign:"right",fontWeight:700}}>{f2l(uk)}</td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr style={{background:"#f8fafc"}}>
-            <td colSpan={3} style={{padding:"10px",fontWeight:700,textAlign:"right"}}>{t.uk}:</td>
-            <td style={{padding:"10px",fontWeight:900,fontSize:15,textAlign:"right",color:"#1d4ed8"}}>{f2l(uk)} €</td>
-          </tr>
-        </tfoot>
-      </table>
-      <div style={{fontSize:10,color:"#94a3b8",marginBottom:6}}>* {t.pdv}</div>
-      {nap && <div style={{background:"#fffbeb",borderRadius:7,padding:"9px 12px",fontSize:11,color:"#92400e",marginBottom:10}}>📌 {t.nap}: {nap}</div>}
-      <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
-        <div style={{fontSize:10,color:"#64748b"}}>{t.pl}</div>
-        <div style={{textAlign:"center"}}>
-          <div style={{width:100,borderTop:"1px solid #0f172a",paddingTop:4,fontSize:10,color:"#64748b"}}>{t.pot}</div>
-        </div>
-      </div>
-      <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>{t.hv}</div>
     </div>
   );
 }
