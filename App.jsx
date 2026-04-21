@@ -3,6 +3,10 @@ import { supabase } from "./supabase.js";
 import { LOGO_B64, SPULNA_B64 } from "./constants.js";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import NalogFolija from "./NalogFolija.jsx";
+import NalogKesa from "./NalogKesa.jsx";
+import NalogSpulna from "./NalogSpulna.jsx";
+import NalogPerforacija from "./NalogPerforacija.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1000,6 +1004,7 @@ export default function App() {
   const [pregNalog,setPregNalog]=useState(null);
   const [pregPonuda,setPregPonuda]=useState(null);
   const [stampa,setStampa]=useState(null);
+  const [aktivniNalog,setAktivniNalog]=useState(null); // {nalog, tip: 'folija'|'kesa'|'spulna'|'perforacija'}
   const [uploading,setUploading]=useState(null);
   const [pdfLoading,setPdfLoading]=useState(false);
   const pregPonudaRef=useRef(null);
@@ -1137,6 +1142,10 @@ export default function App() {
     <div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"'Segoe UI',system-ui,sans-serif",color:"#1e293b",display:"flex"}}>
       {notif&&<Notif msg={notif.msg} tip={notif.tip}/>}
       {stampa&&<PrintA4 data={stampa} onClose={function(){setStampa(null);}}/>}
+      {aktivniNalog&&aktivniNalog.tip==="folija"&&<NalogFolija nalog={aktivniNalog.nalog} onClose={function(){setAktivniNalog(null);}}/>}
+      {aktivniNalog&&aktivniNalog.tip==="kesa"&&<NalogKesa nalog={aktivniNalog.nalog} onClose={function(){setAktivniNalog(null);}}/>}
+      {aktivniNalog&&aktivniNalog.tip==="spulna"&&<NalogSpulna nalog={aktivniNalog.nalog} onClose={function(){setAktivniNalog(null);}}/>}
+      {aktivniNalog&&aktivniNalog.tip==="perforacija"&&<NalogPerforacija nalog={aktivniNalog.nalog} onClose={function(){setAktivniNalog(null);}} msg={msg}/>}
 
       {/* SIDEBAR */}
       <div style={{width:210,background:"#0f172a",display:"flex",flexDirection:"column",flexShrink:0,minHeight:"100vh"}}>
@@ -1300,9 +1309,23 @@ export default function App() {
                       <div style={{fontSize:12,color:"#64748b"}}>Ponuda: <b>{pregNalog.ponBr}</b> · Kupac: <b>{pregNalog.kupac}</b></div>
                       <div style={{fontSize:12,color:"#64748b"}}>Proizvod: <b>{pregNalog.prod}</b> · Količina: <b>{(pregNalog.kol||0).toLocaleString()}</b></div>
                     </div>
-                    <select style={Object.assign({},inp,{width:"auto",fontWeight:700,color:SBJ[pregNalog.status]||"#64748b"})} value={pregNalog.status} onChange={function(e){var v=e.target.value;updN(pregNalog.id,"status",v);setPregNalog(function(p){return Object.assign({},p,{status:v});});}}>
-                      {["Ceka","U toku","Završeno"].map(function(s){return <option key={s} value={s}>{s}</option>;})}
-                    </select>
+                    <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+                      <select style={Object.assign({},inp,{width:"auto",fontWeight:700,color:SBJ[pregNalog.status]||"#64748b"})} value={pregNalog.status} onChange={function(e){var v=e.target.value;updN(pregNalog.id,"status",v);setPregNalog(function(p){return Object.assign({},p,{status:v});});}}>
+                        {["Ceka","U toku","Završeno"].map(function(s){return <option key={s} value={s}>{s}</option>;})}
+                      </select>
+                      {/* Dugme za otvaranje naloga po tipu */}
+                      <button onClick={function(){
+                        var tipNaloga = pregNalog.tip || "folija";
+                        var nazivNaloga = pregNalog.naziv || "";
+                        var tip = "folija";
+                        if(tipNaloga==="kesa") tip="kesa";
+                        else if(tipNaloga==="spulna") tip="spulna";
+                        else if(nazivNaloga.toLowerCase().includes("perf")) tip="perforacija";
+                        setAktivniNalog({nalog:pregNalog, tip:tip});
+                      }} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#8b5cf6",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                        📄 Otvori radni nalog
+                      </button>
+                    </div>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
                     <div>
