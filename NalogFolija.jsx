@@ -1,309 +1,530 @@
-import { useState, useRef } from "react";
-import { LOGO_B64 } from "./constants.js";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "./supabase.js";
 
-const dnow = () => new Date().toLocaleDateString("sr-RS");
-const f2 = v => (!v || isNaN(v)) ? "—" : (+v).toFixed(2).replace(".", ",");
-const BOJE = ["#1d4ed8", "#7c3aed", "#0891b2", "#059669"];
-const SLOJ = ["A", "B", "C", "D"];
+var QR_API = "https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=";
 
-function Header({ boja, naslov, podnaslov, nalog, datumPor, datumIsp, brPor }) {
+function QR({ text }) {
+  return <img src={QR_API + encodeURIComponent(text)} alt="QR" style={{ width: 80, height: 80, display: "block" }} />;
+}
+
+function Hdr({ naziv, brNaloga, suffix, boja, kupac, datum }) {
+  var url = window.location.origin + "?nalog_br=" + brNaloga + suffix;
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 8, borderBottom: "3px solid " + boja, marginBottom: 10 }}>
+    <div style={{ background: boja, color: "#fff", padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
       <div>
-        <img src={LOGO_B64} alt="Maropack" style={{ height: 36, objectFit: "contain" }} />
-        <div style={{ fontSize: 8, color: "#64748b", marginTop: 2 }}>Fleksibilna ambalaža · Rakovac · Srbija</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>Maropack d.o.o. — {naziv}</div>
+        <div style={{ fontSize: 10, color: "#cbd5e1", marginTop: 2 }}>{brNaloga}<b style={{ color: "#fbbf24" }}>{suffix}</b> &nbsp;·&nbsp; {kupac} &nbsp;·&nbsp; {datum}</div>
       </div>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: boja }}>{naslov}</div>
-        {podnaslov && <div style={{ fontSize: 9, color: "#64748b", marginTop: 2 }}>{podnaslov}</div>}
-      </div>
-      <div style={{ textAlign: "right" }}>
-        <div style={{ fontSize: 8, color: "#64748b" }}>RB naloga:</div>
-        <div style={{ fontSize: 13, fontWeight: 800, color: boja }}>{nalog.ponBr || "—"}</div>
-        <div style={{ fontSize: 8, color: "#64748b", marginTop: 2 }}>Datum: <b>{datumPor}</b></div>
-        {datumIsp && <div style={{ fontSize: 8, color: "#64748b" }}>Isporuka: <b>{datumIsp}</b></div>}
-        {brPor && <div style={{ fontSize: 8, color: "#64748b" }}>Br. por.: <b>{brPor}</b></div>}
+      <div style={{ background: "#fff", borderRadius: 6, padding: 4 }}>
+        <QR text={url} />
+        <div style={{ fontSize: 7, color: "#64748b", textAlign: "center", marginTop: 2 }}>Skeniraj</div>
       </div>
     </div>
   );
 }
 
-function Potpisi() {
+function Sec({ title, children }) {
   return (
-    <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 8, display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-      {["Nalog izradio", "Datum naloga", "Nalog odobrio"].map(s => (
-        <div key={s} style={{ textAlign: "center" }}>
-          <div style={{ width: 110, borderBottom: "1px solid #0f172a", margin: "0 auto 3px", height: 20 }} />
-          <div style={{ fontSize: 8, color: "#64748b" }}>{s}</div>
-        </div>
-      ))}
+    <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #e2e8f0" }}>
+      <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: "#94a3b8", marginBottom: 8 }}>{title}</div>
+      {children}
     </div>
   );
 }
 
-export default function NalogFolija({ nalog, onClose }) {
-  const [sheet, setSheet] = useState("glavni");
-  const [loading, setLoading] = useState(false);
-  const refGlavni = useRef(null);
-  const refRezanje = useRef(null);
-  const refMaterijal = useRef(null);
+function Grid({ cols, children, gap = 8, mb = 0 }) {
+  return <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap, marginBottom: mb }}>{children}</div>;
+}
 
-  const [datumPor, setDatumPor] = useState(nalog.datum || dnow());
-  const [datumIsp, setDatumIsp] = useState("");
-  const [brPor, setBrPor] = useState("");
-  const [grafik, setGrafik] = useState("Novi posao");
-  const [smerGP, setSmerGP] = useState("Na noge");
-  const [smerStampa, setSmerStampa] = useState("Na glavu");
-  const [stampMasina, setStampMasina] = useState("");
-  const [stranaStampe, setStranaStampe] = useState("Spoljašnja");
-  const [obimValjka, setObimValjka] = useState("");
-  const [brBoja, setBrBoja] = useState("");
-  const [klise, setKlise] = useState("");
-  const [hilzna, setHilzna] = useState("76 mm");
-  const [precnikRolne, setPrecnikRolne] = useState("");
-  const [tipLepka, setTipLepka] = useState("");
-  const [odnosKomp, setOdnosKomp] = useState("");
-  const [nanosLepka, setNanosLepka] = useState("");
-  const [sirinaLepka, setSirinaLepka] = useState("");
-  const [perf, setPerf] = useState("NE");
-  const [oblikPerf, setOblikPerf] = useState("");
-  const [orijPerf, setOrijPerf] = useState("");
-  const [brTraka, setBrTraka] = useState("1");
-  const [pakKom, setPakKom] = useState("");
-  const [pakKutije, setPakKutije] = useState("");
-  const [pakPaletno, setPakPaletno] = useState("");
-  const [dimKutije, setDimKutije] = useState("");
-  const [napomena, setNapomena] = useState(nalog.nap || "");
-  const [napOperatera, setNapOperatera] = useState("");
-  const [lokacija, setLokacija] = useState("Rakovac");
-  const [dimPalete, setDimPalete] = useState("120x80");
-  const [nacinPak, setNacinPak] = useState("");
-  const [tolerancija, setTolercancija] = useState("±2");
+function Field({ label, value, color }) {
+  var bg = color === "blue" ? "#eff6ff" : color === "green" ? "#f0fdf4" : color === "yellow" ? "#fefce8" : color === "red" ? "#fef2f2" : "#f8fafc";
+  var cl = color === "blue" ? "#1e40af" : color === "green" ? "#166534" : color === "yellow" ? "#854d0e" : color === "red" ? "#991b1b" : "#1e293b";
+  var bc = color === "blue" ? "#bfdbfe" : color === "green" ? "#bbf7d0" : color === "yellow" ? "#fde68a" : color === "red" ? "#fecaca" : "#e2e8f0";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ fontSize: 9, color: "#94a3b8" }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, padding: "4px 7px", background: bg, color: cl, borderRadius: 5, border: "0.5px solid " + bc }}>{value || "—"}</div>
+    </div>
+  );
+}
 
-  const res = nalog.res || {};
-  const mats = (nalog.mats || []).filter(m => m.tip);
-  const kolNalog = nalog.kol || 0;
-  const kolZaRad = Math.round(kolNalog * 1.1);
-  const sirProiz = nalog.sir || "";
-  const idealSir = sirProiz ? Math.round(+sirProiz * (+brTraka || 1) + 20) : "";
+function MatRow({ label, tip, sirina, rolna, lokacija, ima }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "#f8fafc", borderRadius: 5, border: "0.5px solid #e2e8f0", marginBottom: 5 }}>
+      <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: label === "Mat.1" ? "#eff6ff" : label === "Mat.2" ? "#f5f3ff" : label === "Mat.3" ? "#fefce8" : "#fef3c7", color: label === "Mat.1" ? "#1e40af" : label === "Mat.2" ? "#5b21b6" : label === "Mat.3" ? "#854d0e" : "#92400e", flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{tip} <span style={{ fontSize: 10, color: "#64748b", fontWeight: 400 }}>· {sirina}mm</span></div>
+      {ima ? (
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 11, color: "#166534", fontWeight: 600 }}>{rolna}</div>
+          <div style={{ fontSize: 9, color: "#64748b" }}>{lokacija}</div>
+        </div>
+      ) : (
+        <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "#fef2f2", color: "#991b1b", border: "0.5px solid #fecaca" }}>Nema u magacinu!</span>
+      )}
+    </div>
+  );
+}
 
-  async function downloadAll() {
+function PotpisLinja() {
+  return (
+    <div style={{ padding: "8px 14px", background: "#f8fafc", display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94a3b8" }}>
+      <span>Nalog izradio: _________________ &nbsp; Datum: _________</span>
+      <span>Nalog odobrio: _________________</span>
+    </div>
+  );
+}
+
+function NalogCard({ children, style }) {
+  return (
+    <div style={{ background: "#fff", border: "0.5px solid #e2e8f0", borderRadius: 8, overflow: "hidden", marginBottom: 20, ...style }}>
+      {children}
+    </div>
+  );
+}
+
+export default function NalogFolija({ nalog, onClose, card, inp, lbl, msg }) {
+  var [aktivniTab, setAktivniTab] = useState("mat");
+  var [rolne, setRolne] = useState([]);
+  var [loading, setLoading] = useState(true);
+  var printRef = useRef(null);
+
+  var n = nalog;
+  var brN = n.ponBr || n.br || "MP-2026-XXX";
+  var datum = n.datum || new Date().toLocaleDateString("sr-RS");
+  var datumIsp = n.datumIsp || "—";
+  var kupac = n.kupac || "—";
+  var naziv = n.prod || n.naziv || "—";
+  var mats = n.mats || [];
+  var kolM = n.kol || 0;
+  var sk = n.sk || 10;
+  var zaRadM = Math.round(kolM * (1 + sk / 100));
+  var sirina = n.sir || 0;
+  var idealSir = n.ik || sirina;
+
+  useEffect(function () {
+    loadRolne();
+  }, [idealSir]);
+
+  async function loadRolne() {
     setLoading(true);
-    const refs = [refGlavni, refRezanje, refMaterijal];
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     try {
-      for (let i = 0; i < refs.length; i++) {
-        if (!refs[i].current) continue;
-        const canvas = await html2canvas(refs[i].current, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-        const imgData = canvas.toDataURL("image/png");
-        const pdfW = pdf.internal.pageSize.getWidth();
-        const pdfH = (canvas.height * pdfW) / canvas.width;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, 0, pdfW, Math.min(pdfH, 297));
-      }
-      pdf.save("Nalozi-" + (nalog.ponBr || "nalog") + ".pdf");
+      var res = await supabase.from("magacin").select("*")
+        .gte("sirina", idealSir)
+        .lte("sirina", +idealSir + 25)
+        .neq("status", "Iskorišćeno")
+        .order("sirina", { ascending: true });
+      setRolne(res.data || []);
     } catch (e) { console.error(e); }
     setLoading(false);
   }
 
-  const inp = { width: "100%", padding: "5px 8px", borderRadius: 6, border: "1px solid #e2e8f0", fontSize: 11, color: "#1e293b", background: "#f8fafc", outline: "none", boxSizing: "border-box" };
-  const lbl = { fontSize: 9, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3, display: "block" };
-  const F = { background: "#f8fafc", borderRadius: 5, padding: "4px 7px", border: "1px solid #e8edf3" };
-  const FL = { fontSize: 8, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 1 };
-  const FV = { fontSize: 10, fontWeight: 600, color: "#0f172a" };
+  function nadjiRolnu(tip) {
+    if (!tip) return null;
+    var tipBase = tip.split(" ")[0].toLowerCase();
+    return rolne.find(function (r) {
+      return r.tip && r.tip.toLowerCase().includes(tipBase);
+    });
+  }
+
+  function printNalog() {
+    window.print();
+  }
+
+  var TABS = [
+    { k: "mat", l: "1. Materijal", boja: "#1e3a5f", suffix: "-7" },
+    { k: "stm", l: "2. Štampa", boja: "#1a3a1a", suffix: "-2" },
+    { k: "kas", l: "3. Kaširanje", boja: "#3a1a1a", suffix: "-3" },
+    { k: "prf", l: "4. Perforacija", boja: "#1a1a3a", suffix: "-5" },
+    { k: "rez", l: "5. Rezanje", boja: "#1a2e1a", suffix: "-4" },
+  ];
+
+  var aktTab = TABS.find(function (t) { return t.k === aktivniTab; });
 
   return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 10000, overflow: "auto", padding: 20 }}>
-      <div style={{ background: "#0f172a", borderRadius: 10, padding: "10px 16px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 1 }}>
-        <div style={{ color: "#fff", fontWeight: 700, fontSize: 13, flex: 1 }}>🧮 Radni nalozi — Folija · {nalog.ponBr}</div>
-        {[["glavni", "📋 Glavni"], ["rezanje", "✂️ Rezanje"], ["materijal", "📦 Materijal"]].map(s => (
-          <button key={s[0]} onClick={() => setSheet(s[0])} style={{ padding: "5px 12px", borderRadius: 6, border: sheet === s[0] ? "none" : "1px solid #334155", cursor: "pointer", fontSize: 11, fontWeight: 700, background: sheet === s[0] ? "#1d4ed8" : "transparent", color: sheet === s[0] ? "#fff" : "#94a3b8" }}>{s[1]}</button>
-        ))}
-        <button onClick={() => window.print()} style={{ padding: "5px 14px", borderRadius: 6, border: "none", background: "#1d4ed8", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>🖨️ Štampaj</button>
-        <button onClick={downloadAll} style={{ padding: "5px 14px", borderRadius: 6, border: "none", background: "#059669", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "⏳..." : "⬇️ Svi PDF"}</button>
-        <button onClick={onClose} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#94a3b8", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>✕</button>
-      </div>
-
-      {/* Unos */}
-      <div style={{ background: "#fff", borderRadius: 10, padding: 14, marginBottom: 12, border: "1px solid #e2e8f0" }}>
-        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: "#1d4ed8" }}>✏️ Unesi podatke pre štampe</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 8 }}>
-          {[["Datum porudžbine", datumPor, setDatumPor], ["Datum isporuke", datumIsp, setDatumIsp], ["Br. porudžbine", brPor, setBrPor], ["Hilzna", hilzna, setHilzna], ["Prečnik rolne max", precnikRolne, setPrecnikRolne], ["Tip lepka", tipLepka, setTipLepka], ["Odnos komponenti", odnosKomp, setOdnosKomp], ["Nanos lepka g/m²", nanosLepka, setNanosLepka], ["Širina nanosa mm", sirinaLepka, setSirinaLepka], ["Štamparska mašina", stampMasina, setStampMasina], ["Obim valjka mm", obimValjka, setObimValjka], ["Broj boja", brBoja, setBrBoja], ["Kliše", klise, setKlise], ["Br. traka po širini", brTraka, setBrTraka], ["Pakovanje kom", pakKom, setPakKom], ["Pakovanje u kutije", pakKutije, setPakKutije], ["Dim. kutije", dimKutije, setDimKutije], ["Paletno pakovanje", pakPaletno, setPakPaletno]].map(x => (
-            <div key={x[0]}><label style={lbl}>{x[0]}</label><input style={inp} value={x[1]} onChange={e => x[2](e.target.value)} /></div>
-          ))}
-          <div><label style={lbl}>Grafička rešenje</label><select style={inp} value={grafik} onChange={e => setGrafik(e.target.value)}><option>Novi posao</option><option>Reprint bez izmena</option><option>Reprint sa izmenama</option></select></div>
-          <div><label style={lbl}>Strana štampe</label><select style={inp} value={stranaStampe} onChange={e => setStranaStampe(e.target.value)}><option>Spoljašnja</option><option>Unutrašnja</option></select></div>
-          <div><label style={lbl}>Smer odm. GP</label><select style={inp} value={smerGP} onChange={e => setSmerGP(e.target.value)}><option>Na noge</option><option>Na glavu</option><option>Levo</option><option>Desno</option></select></div>
-          <div><label style={lbl}>Smer odm. štampa</label><select style={inp} value={smerStampa} onChange={e => setSmerStampa(e.target.value)}><option>Na glavu</option><option>Na noge</option><option>Levo</option><option>Desno</option></select></div>
-          <div><label style={lbl}>Perforacija</label><select style={inp} value={perf} onChange={e => setPerf(e.target.value)}><option>NE</option><option>DA</option></select></div>
-          {perf === "DA" && <>
-            <div><label style={lbl}>Oblik perf.</label><input style={inp} value={oblikPerf} onChange={e => setOblikPerf(e.target.value)} /></div>
-            <div><label style={lbl}>Orijentacija perf.</label><input style={inp} value={orijPerf} onChange={e => setOrijPerf(e.target.value)} /></div>
-          </>}
-        </div>
-        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <div><label style={lbl}>Napomena</label><textarea style={{ ...inp, height: 40, resize: "vertical" }} value={napomena} onChange={e => setNapomena(e.target.value)} /></div>
-          <div><label style={lbl}>Napomene operatera</label><textarea style={{ ...inp, height: 40, resize: "vertical" }} value={napOperatera} onChange={e => setNapOperatera(e.target.value)} /></div>
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 9000, display: "flex", flexDirection: "column" }}>
+      {/* TOP BAR */}
+      <div style={{ background: "#0f172a", padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+        <button onClick={onClose} style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "#334155", color: "#fff", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>← Nazad</button>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Radni nalozi — {brN} &nbsp;·&nbsp; {kupac}</div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <button onClick={printNalog} style={{ padding: "6px 14px", borderRadius: 7, border: "none", background: "#1d4ed8", color: "#fff", cursor: "pointer", fontWeight: 700, fontSize: 12 }}>🖨️ Štampaj ovaj nalog</button>
         </div>
       </div>
 
-      {/* GLAVNI NALOG */}
-      <div ref={refGlavni} style={{ display: sheet === "glavni" ? "block" : "none", background: "#fff", width: "210mm", minHeight: "297mm", margin: "0 auto", padding: "10mm 8mm", fontFamily: "'Segoe UI',system-ui,sans-serif", fontSize: 10, color: "#0f172a", boxSizing: "border-box" }}>
-        <Header boja="#1d4ed8" naslov="NALOG ZA PROIZVODNJU" podnaslov="🧮 Folija / Laminat" nalog={nalog} datumPor={datumPor} datumIsp={datumIsp} brPor={brPor} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 6 }}>
-          <div style={F}><div style={FL}>Kupac</div><div style={FV}>{nalog.kupac || "—"}</div></div>
-          <div style={{ ...F, gridColumn: "2/4" }}><div style={FL}>Naziv proizvoda</div><div style={FV}>{nalog.prod || nalog.naziv || "—"}</div></div>
-          <div style={F}><div style={FL}>Grafičko rešenje</div><div style={FV}>{grafik}</div></div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 5, marginBottom: 6 }}>
-          <div style={F}>
-            <div style={{ ...FL, color: "#1d4ed8", marginBottom: 4 }}>Sastav gotovog proizvoda</div>
-            <div style={{ fontWeight: 700, fontSize: 10, color: "#1d4ed8", marginBottom: 4 }}>{mats.map(m => m.tip + " " + m.deb + "µ").join(" + ") || "—"}</div>
-            {mats.map((m, i) => (
-              <div key={i} style={{ display: "flex", gap: 5, alignItems: "center", padding: "2px 0", borderBottom: i < mats.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-                <div style={{ width: 15, height: 15, borderRadius: 3, background: BOJE[i], color: "#fff", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{SLOJ[i]}</div>
-                <div style={{ flex: 1, fontWeight: 600, fontSize: 10 }}>{m.tip}</div>
-                <div style={{ fontSize: 9, color: "#64748b" }}>{m.deb}µ</div>
-                <div style={{ fontSize: 9, color: "#64748b" }}>{m.tg ? (+m.tg).toFixed(2) + "g/m²" : ""}</div>
-                {m.stamp && <span style={{ fontSize: 8, color: "#0891b2", fontWeight: 700 }}>STAMP.</span>}
-                {m.kas > 0 && <span style={{ fontSize: 8, color: "#1d4ed8", fontWeight: 700 }}>{m.kas}×KAS.</span>}
-                {m.lak > 0 && <span style={{ fontSize: 8, color: "#7c3aed", fontWeight: 700 }}>{m.lak}×LAK.</span>}
+      {/* TABS */}
+      <div style={{ background: "#1e293b", padding: "8px 16px 0", display: "flex", gap: 4, flexShrink: 0 }}>
+        {TABS.map(function (t) {
+          return (
+            <button key={t.k} onClick={function () { setAktivniTab(t.k); }}
+              style={{ padding: "7px 14px", borderRadius: "7px 7px 0 0", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: aktivniTab === t.k ? "#f1f5f9" : "transparent", color: aktivniTab === t.k ? "#0f172a" : "#94a3b8" }}>
+              {t.l}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* CONTENT */}
+      <div style={{ flex: 1, overflow: "auto", background: "#f1f5f9", padding: 20 }} ref={printRef}>
+
+        {/* ===== 1. MATERIJAL ===== */}
+        {aktivniTab === "mat" && (
+          <NalogCard>
+            <Hdr naziv="Nalog za materijal" brNaloga={brN} suffix="-7" boja="#1e3a5f" kupac={kupac} datum={datum} />
+            <Sec title="Identifikacija naloga">
+              <Grid cols={4} mb={8}>
+                <Field label="Radni nalog br." value={brN} color="blue" />
+                <Field label="Datum izdavanja" value={datum} />
+                <Field label="Datum isporuke" value={datumIsp} color="yellow" />
+                <Field label="Kupac" value={kupac} />
+              </Grid>
+              <Field label="Naziv proizvoda" value={naziv} />
+            </Sec>
+
+            <Sec title={"Materijali potrebni — idealna širina: " + idealSir + "mm, traži: " + idealSir + "–" + (+idealSir + 25) + "mm"}>
+              {mats.length === 0 ? (
+                <div style={{ color: "#94a3b8", fontSize: 12, padding: 8 }}>Nema materijala u bazi za ovaj proizvod.</div>
+              ) : mats.map(function (m, i) {
+                var r = nadjiRolnu(m.tip);
+                return (
+                  <MatRow key={i}
+                    label={"Mat." + (i + 1)}
+                    tip={m.tip + (m.deb ? " " + m.deb + "mic" : "")}
+                    sirina={idealSir}
+                    rolna={r ? r.br_rolne + " · " + (r.metraza_ost || r.metraza || 0).toLocaleString() + "m" : ""}
+                    lokacija={r ? r.palet || r.sch || "—" : ""}
+                    ima={!!r}
+                  />
+                );
+              })}
+              {loading && <div style={{ fontSize: 11, color: "#94a3b8" }}>⏳ Pretražujem magacin...</div>}
+            </Sec>
+
+            <Sec title="Količine">
+              <Grid cols={4}>
+                <Field label="Poručeno (m)" value={kolM.toLocaleString()} />
+                <Field label="Za rad (m)" value={zaRadM.toLocaleString()} color="yellow" />
+                <Field label="Škart %" value={sk + "%"} />
+                <Field label="Širina materijala" value={idealSir + " mm"} color="blue" />
+              </Grid>
+            </Sec>
+
+            <Sec title="Napomena">
+              <div style={{ minHeight: 36, padding: 8, background: "#f8fafc", borderRadius: 5, border: "0.5px solid #e2e8f0", fontSize: 12, color: "#64748b" }}>
+                {n.nap || "Proveriti stanje i kvalitet materijala pre puštanja u produkciju."}
               </div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
-            {[["Širina proizvoda mm", sirProiz ? sirProiz + " mm" : "—"], ["Idealna širina mat.", idealSir ? idealSir + " mm" : "—"], ["Poručena kol. m", kolNalog ? kolNalog.toLocaleString() + " m" : "—"], ["Količina za rad m", kolZaRad ? kolZaRad.toLocaleString() + " m" : "—"], ["Smer odm. GP", smerGP], ["Perforacija", perf + (perf === "DA" ? " · " + oblikPerf : "")], ["Br. traka po širini", brTraka || "—"], ["Hilzna", hilzna]].map(x => <div key={x[0]} style={F}><div style={FL}>{x[0]}</div><div style={FV}>{x[1]}</div></div>)}
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 6 }}>
-          <div style={F}>
-            <div style={{ ...FL, color: "#0891b2", marginBottom: 4 }}>🖨️ Podaci za štampanje</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
-              {[["Štamparska mašina", stampMasina || "—"], ["Strana štampe", stranaStampe], ["Obim valjka mm", obimValjka || "—"], ["Broj boja", brBoja || "—"], ["Smer odm. sa štampe", smerStampa], ["Unutr. prečnik hilzne", hilzna], ["Kliše", klise || "—"], ["Štamparija", "—"]].map(x => <div key={x[0]} style={{ ...F, padding: "3px 5px" }}><div style={{ ...FL, fontSize: 7 }}>{x[0]}</div><div style={{ ...FV, fontSize: 9 }}>{x[1]}</div></div>)}
-            </div>
-          </div>
-          <div style={F}>
-            <div style={{ ...FL, color: "#1d4ed8", marginBottom: 4 }}>🔗 Podaci za kaširanje</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
-              {[["Tip lepka", tipLepka || "—"], ["Odnos komponenti", odnosKomp || "—"], ["Nanos lepka g/m²", nanosLepka || "—"], ["Širina nanosa mm", sirinaLepka || "—"], ["Kasiranje prolazi", res.kas ? res.kas + "×" : "—"], ["Lakiranje prolazi", res.lak ? res.lak + "×" : "—"]].map(x => <div key={x[0]} style={{ ...F, padding: "3px 5px" }}><div style={{ ...FL, fontSize: 7 }}>{x[0]}</div><div style={{ ...FV, fontSize: 9 }}>{x[1]}</div></div>)}
-            </div>
-            <div style={{ ...FL, color: "#059669", marginBottom: 3, marginTop: 5 }}>📦 Potrebe materijala</div>
-            {mats.map((m, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", borderBottom: "1px solid #f1f5f9", fontSize: 8 }}>
-                <span style={{ color: BOJE[i], fontWeight: 700 }}>{SLOJ[i]}: {m.tip} {m.deb}µ</span>
-                <span style={{ fontWeight: 700 }}>{res.det && res.det[i] ? (+res.det[i].tkg_nalog || 0).toFixed(1) + " kg" : "—"}</span>
-                <span style={{ color: "#64748b" }}>{kolNalog ? kolNalog.toLocaleString() + "m" : "—"}</span>
+            </Sec>
+            <PotpisLinja />
+          </NalogCard>
+        )}
+
+        {/* ===== 2. STAMPA ===== */}
+        {aktivniTab === "stm" && (
+          <NalogCard>
+            <Hdr naziv="Nalog za štampu" brNaloga={brN} suffix="-2" boja="#1a3a1a" kupac={kupac} datum={datum} />
+            <Sec title="Identifikacija">
+              <Grid cols={4} mb={8}>
+                <Field label="Porudžbenica br." value={brN} color="blue" />
+                <Field label="Datum izdavanja" value={datum} />
+                <Field label="Rok isporuke" value="5 dana od mat." color="yellow" />
+                <Field label="Status posla" value={n.grafika || "Nov posao"} />
+              </Grid>
+              <Grid cols={2}>
+                <Field label="Kupac" value={kupac} />
+                <Field label="Naziv proizvoda" value={naziv} />
+              </Grid>
+            </Sec>
+
+            <Sec title="Specifikacija štampe">
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "0.5px solid #e2e8f0" }}>
+                      {["RB", "Naziv proizvoda", "Dim. rasklopa", "Br. traka", "Materijal", "Kol. štampu (m)", "Kol. (kg)", "Vrsta štampe", "Br. boja", "Smer"].map(function (h) {
+                        return <th key={h} style={{ padding: "5px 7px", textAlign: "left", color: "#64748b", fontWeight: 600 }}>{h}</th>;
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: "5px 7px", fontWeight: 700 }}>1</td>
+                      <td style={{ padding: "5px 7px" }}>{naziv}</td>
+                      <td style={{ padding: "5px 7px" }}>{idealSir}×{zaRadM}mm</td>
+                      <td style={{ padding: "5px 7px" }}>1</td>
+                      <td style={{ padding: "5px 7px" }}>{mats[0] ? mats[0].tip + " " + (mats[0].deb || "") + "mic, " + idealSir + "mm" : "—"}</td>
+                      <td style={{ padding: "5px 7px", color: "#059669", fontWeight: 600 }}>{zaRadM.toLocaleString()}</td>
+                      <td style={{ padding: "5px 7px" }}>{mats[0] && mats[0].deb ? Math.round(zaRadM * idealSir / 1000 * mats[0].deb * 0.91 / 1000) + " kg" : "—"}</td>
+                      <td style={{ padding: "5px 7px", color: "#7c3aed", fontWeight: 600 }}>{n.stm || "Flexo"}</td>
+                      <td style={{ padding: "5px 7px" }}>{n.brBoja || "4"}</td>
+                      <td style={{ padding: "5px 7px" }}>{n.smer || "Desno"}</td>
+                    </tr>
+                    {[2, 3, 4].map(function (i) {
+                      return <tr key={i} style={{ borderBottom: "0.5px solid #f1f5f9" }}>
+                        <td style={{ padding: "5px 7px", color: "#94a3b8" }}>{i}</td>
+                        {Array(9).fill(null).map(function (_, j) { return <td key={j} style={{ padding: "5px 7px", color: "#94a3b8" }}>—</td>; })}
+                      </tr>;
+                    })}
+                  </tbody>
+                </table>
               </div>
-            ))}
-            {res.ukLep > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 8 }}><span style={{ color: "#854d0e", fontWeight: 700 }}>🔗 Lepak</span><span>{(res.ukLep_nalog || 0).toFixed(2)} kg</span></div>}
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, marginBottom: 5 }}>
-          {[["Pakovanje kom", pakKom || "—"], ["Pakovanje u kutije", pakKutije || "—"], ["Dim. kutije", dimKutije || "—"], ["Paletno pakovanje", pakPaletno || "—"]].map(x => <div key={x[0]} style={F}><div style={FL}>{x[0]}</div><div style={FV}>{x[1]}</div></div>)}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginBottom: 5 }}>
-          <div style={{ ...F, borderLeft: "3px solid #f59e0b" }}><div style={{ ...FL, color: "#92400e" }}>Napomena</div><div style={{ fontSize: 9, minHeight: 18 }}>{napomena || "—"}</div></div>
-          <div style={{ ...F, borderLeft: "3px solid #94a3b8" }}><div style={FL}>Napomene operatera</div><div style={{ fontSize: 9, minHeight: 18, color: "#64748b" }}>{napOperatera || ""}</div></div>
-        </div>
-        <div style={{ marginBottom: 6 }}>
-          <div style={{ fontSize: 8, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>Zastoji</div>
-          {[1, 2, 3].map(i => <div key={i} style={{ display: "flex", gap: 6, marginBottom: 2, fontSize: 8, alignItems: "center" }}><span style={{ color: "#94a3b8", width: 32, flexShrink: 0 }}>Od/do:</span><div style={{ flex: 1, borderBottom: "1px dashed #cbd5e1", height: 12 }} /><span style={{ color: "#94a3b8" }}>Razlog:</span><div style={{ flex: 2, borderBottom: "1px dashed #cbd5e1", height: 12 }} /></div>)}
-        </div>
-        <Potpisi />
-      </div>
+              <div style={{ fontSize: 10, color: "#64748b", marginTop: 6 }}>Cena usluge: 0,50 €/kg</div>
+            </Sec>
 
-      {/* NALOG ZA REZANJE */}
-      <div ref={refRezanje} style={{ display: sheet === "rezanje" ? "block" : "none", background: "#fff", width: "210mm", minHeight: "297mm", margin: "0 auto", padding: "10mm 8mm", fontFamily: "'Segoe UI',system-ui,sans-serif", fontSize: 10, color: "#0f172a", boxSizing: "border-box" }}>
-        <Header boja="#6366f1" naslov="SPECIFIKACIJA REZANJA" podnaslov="✂️ Nalog za interno rezanje" nalog={nalog} datumPor={datumPor} datumIsp={datumIsp} brPor={brPor} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 6 }}>
-          <div style={F}><div style={FL}>Kupac</div><div style={FV}>{nalog.kupac || "—"}</div></div>
-          <div style={F}><div style={FL}>Interno rezanje za</div><div style={FV}>{nalog.kupac || "—"}</div></div>
-          <div style={{ ...F, gridColumn: "1/3" }}><div style={FL}>Vrsta materijala — Sastav</div><div style={FV}>{mats.map(m => m.tip + " " + m.deb + "µ").join(" + ") || "—"}</div></div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, marginBottom: 6 }}>
-          {[["Debljina materijala", mats.reduce((s, m) => s + (+m.deb || 0), 0) + "µ"], ["Količina za rasecanje m", kolZaRad ? kolZaRad.toLocaleString() + " m" : "—"], ["Širina matične rolne mm", idealSir ? idealSir + " mm" : "—"], ["Broj traka u mat. rolni", brTraka || "—"], ["Širina traka mm", sirProiz ? Array(+brTraka || 1).fill(sirProiz + "mm").join("+") : "—"], ["Corona tretman", "—"], ["Lokacija rolne", lokacija], ["Dimenzija palete", dimPalete], ["Način pakovanja", nacinPak || "—"], ["Tolerancija u širini", tolerancija], ["Hilzna", hilzna], ["Prečnik rolne max", precnikRolne || "—"]].map(x => <div key={x[0]} style={F}><div style={FL}>{x[0]}</div><div style={FV}>{x[1]}</div></div>)}
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: "#6366f1", textTransform: "uppercase", marginBottom: 5 }}>Dimenzije rezanja</div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
-            <thead>
-              <tr style={{ background: "#6366f120" }}>
-                {["Format", "Dim. mm", "Br. naloga", "Kupac - naziv proizvoda", "Hilzna", "Prečnik rolne", "Metraža", "Br. rolni", "Izlaz"].map(h => <th key={h} style={{ padding: "4px 5px", textAlign: "left", border: "0.5px solid #e2e8f0", color: "#6366f1", fontWeight: 700, fontSize: 8 }}>{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {["I", "II", "III", "IV"].map((fmt, i) => (
-                <tr key={fmt}>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0", fontWeight: 700 }}>FORMAT {fmt}</td>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0", color: i === 0 ? "#0f172a" : "#e2e8f0" }}>{i === 0 ? (sirProiz || "—") : ""}</td>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0", color: i === 0 ? "#1d4ed8" : "#e2e8f0" }}>{i === 0 ? (nalog.ponBr || "—") : ""}</td>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0", fontSize: 8, color: i === 0 ? "#0f172a" : "#e2e8f0" }}>{i === 0 ? (nalog.prod || nalog.naziv || "—") : ""}</td>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0", color: i === 0 ? "#0f172a" : "#e2e8f0" }}>{i === 0 ? hilzna : ""}</td>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0", color: i === 0 ? "#0f172a" : "#e2e8f0" }}>{i === 0 ? (precnikRolne || "—") : ""}</td>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0", color: i === 0 ? "#059669" : "#e2e8f0", fontWeight: i === 0 ? 700 : 400 }}>{i === 0 ? (kolZaRad ? kolZaRad.toLocaleString() + " m" : "—") : ""}</td>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0", height: 24 }}></td>
-                  <td style={{ padding: "5px", border: "0.5px solid #e2e8f0" }}></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ ...F, borderLeft: "3px solid #6366f1", marginBottom: 6 }}><div style={{ ...FL, color: "#4338ca" }}>Napomena</div><div style={{ fontSize: 9, minHeight: 18 }}>{napomena || "—"}</div></div>
-        <div style={{ ...F, borderLeft: "3px solid #94a3b8", marginBottom: 6 }}><div style={FL}>Napomene operatera</div><div style={{ minHeight: 20 }}></div></div>
-        <Potpisi />
-      </div>
+            <Sec title="Tehnički parametri">
+              <Grid cols={4} mb={8}>
+                <Field label="Štamparska mašina" value={n.stmMasina || "Flexo 8-boja"} />
+                <Field label="Obim valjka (mm)" value={n.obimValjka || "—"} />
+                <Field label="Strana štampe" value={n.stranaStm || "Spolja"} />
+                <Field label="Unutr. prečnik hilzne" value={n.hilzna || "76 mm"} />
+              </Grid>
+              <Grid cols={4}>
+                <Field label="Br. traka po širini" value={n.brTraka || "1"} />
+                <Field label="Kliše" value={n.klise || "—"} />
+                <Field label="Print proof" value={n.proof || "—"} />
+                <Field label="Linijatura" value={n.linijatura || "—"} />
+              </Grid>
+            </Sec>
 
-      {/* NALOG ZA MATERIJAL */}
-      <div ref={refMaterijal} style={{ display: sheet === "materijal" ? "block" : "none", background: "#fff", width: "210mm", minHeight: "297mm", margin: "0 auto", padding: "10mm 8mm", fontFamily: "'Segoe UI',system-ui,sans-serif", fontSize: 10, color: "#0f172a", boxSizing: "border-box" }}>
-        <Header boja="#f59e0b" naslov="NALOG ZA POTREBU MATERIJALA" podnaslov="📦 Izdavanje iz magacina" nalog={nalog} datumPor={datumPor} datumIsp={datumIsp} brPor={brPor} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 8 }}>
-          <div style={F}><div style={FL}>Kupac</div><div style={FV}>{nalog.kupac || "—"}</div></div>
-          <div style={F}><div style={FL}>Naziv proizvoda</div><div style={FV}>{nalog.prod || nalog.naziv || "—"}</div></div>
-        </div>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "#f59e0b", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Potreba materijala za nalog</div>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10, marginBottom: 10 }}>
-          <thead>
-            <tr style={{ background: "#fef3c7" }}>
-              {["Sloj", "Materijal", "Širina mat. mm", "Metraža m", "Količina kg"].map(h => <th key={h} style={{ padding: "6px 8px", textAlign: "left", border: "0.5px solid #e2e8f0", color: "#92400e", fontWeight: 700 }}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {mats.map((m, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                <td style={{ padding: "8px", border: "0.5px solid #e2e8f0" }}>
-                  <div style={{ width: 18, height: 18, borderRadius: 3, background: BOJE[i], color: "#fff", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{SLOJ[i]}</div>
-                </td>
-                <td style={{ padding: "8px", fontWeight: 600, border: "0.5px solid #e2e8f0" }}>{m.tip} {m.deb}µ</td>
-                <td style={{ padding: "8px", border: "0.5px solid #e2e8f0" }}>{idealSir ? idealSir + " mm" : "—"}</td>
-                <td style={{ padding: "8px", fontWeight: 700, color: "#1d4ed8", border: "0.5px solid #e2e8f0" }}>{kolZaRad ? kolZaRad.toLocaleString() + " m" : "—"}</td>
-                <td style={{ padding: "8px", fontWeight: 700, color: "#059669", border: "0.5px solid #e2e8f0" }}>{res.det && res.det[i] ? (+res.det[i].tkg_nalog || 0).toFixed(2) + " kg" : "—"}</td>
-              </tr>
-            ))}
-            {res.ukLep > 0 && (
-              <tr style={{ background: "#fffbeb" }}>
-                <td style={{ padding: "8px", border: "0.5px solid #e2e8f0" }}>🔗</td>
-                <td style={{ padding: "8px", fontWeight: 600, border: "0.5px solid #e2e8f0" }}>Lepak</td>
-                <td style={{ padding: "8px", border: "0.5px solid #e2e8f0" }}>—</td>
-                <td style={{ padding: "8px", border: "0.5px solid #e2e8f0" }}>—</td>
-                <td style={{ padding: "8px", fontWeight: 700, color: "#854d0e", border: "0.5px solid #e2e8f0" }}>{(res.ukLep_nalog || 0).toFixed(2)} kg</td>
-              </tr>
+            <Sec title="Prateći materijal">
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                {["Fajlovi za pripremu", "Kontrolni fajl od kupca", "Digitalni otisak", "Tehnički crtež rasklopa", "Štampani uzorak"].map(function (x) {
+                  return <span key={x} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "#f8fafc", border: "0.5px solid #e2e8f0", color: "#64748b" }}>{x}</span>;
+                })}
+              </div>
+            </Sec>
+
+            <Sec title="Opšte napomene">
+              <div style={{ fontSize: 11, color: "#64748b", padding: 8, background: "#f8fafc", borderRadius: 5, border: "0.5px solid #e2e8f0" }}>
+                Obratiti pažnju na kvalitet štampe. Bez ogrebotina, raspasivanja, prskanja boje. Adhezija adekvatna. Rolne ravno namotane, bez nastavaka. Škart vratiti sa štampanim materijalom. Dokument punovažan bez pečata i potpisa.
+              </div>
+            </Sec>
+            <div style={{ padding: "6px 14px", background: "#f8fafc", fontSize: 10, color: "#94a3b8", borderTop: "0.5px solid #e2e8f0" }}>
+              Kontakt za overu: Marko Savić · m.savic@maropack.rs · 060/381-0123
+            </div>
+            <PotpisLinja />
+          </NalogCard>
+        )}
+
+        {/* ===== 3. KASIRANJE ===== */}
+        {aktivniTab === "kas" && (
+          <NalogCard>
+            <Hdr naziv="Nalog za kaširanje" brNaloga={brN} suffix="-3" boja="#3a1a1a" kupac={kupac} datum={datum} />
+            <Sec title="Identifikacija">
+              <Grid cols={4} mb={8}>
+                <Field label="Radni nalog br." value={brN} color="blue" />
+                <Field label="Datum izdavanja" value={datum} />
+                <Field label="Kupac" value={kupac} />
+                <Field label="Tiraz (m)" value={zaRadM.toLocaleString()} />
+              </Grid>
+              <Grid cols={2}>
+                <Field label="Naziv proizvoda" value={naziv} />
+                <Field label="Sastav GP" value={mats.map(function (m) { return m.tip + " " + (m.deb || "") + "mic"; }).join(" + ") || "—"} />
+              </Grid>
+            </Sec>
+
+            {[1, 2, 3].map(function (kasIdx) {
+              var matA = mats[kasIdx * 2 - 2];
+              var matB = mats[kasIdx * 2 - 1];
+              var rolnaA = matA ? nadjiRolnu(matA.tip) : null;
+              var rolnaB = matB ? nadjiRolnu(matB.tip) : null;
+              var active = kasIdx === 1 || (matA && matB);
+              return (
+                <Sec key={kasIdx} title={(kasIdx === 1 ? "1." : kasIdx === 2 ? "2." : "3.") + " kaširanje" + (!active ? " (nije potrebno)" : "")}>
+                  <div style={{ opacity: active ? 1 : 0.4 }}>
+                    <Grid cols={4} mb={8}>
+                      <Field label="Širina nanosa lepka (mm)" value={active ? idealSir : "—"} />
+                      <Field label="Širina form. valjka (mm)" value={active ? (+idealSir + 10) : "—"} />
+                      <Field label="Odnos lepka" value={active ? (n.lepakOdnos || "3:1") : "—"} />
+                      <Field label="Nanos lepka (g/m²)" value={active ? (n.lepakNanos || "3,5") : "—"} color={active ? "yellow" : ""} />
+                    </Grid>
+                    <MatRow label="Odmotač A"
+                      tip={matA ? matA.tip + " " + (matA.deb || "") + "mic" : "—"}
+                      sirina={idealSir}
+                      rolna={rolnaA ? rolnaA.br_rolne + " · " + (rolnaA.metraza_ost || 0).toLocaleString() + "m" : ""}
+                      lokacija={rolnaA ? rolnaA.palet || "—" : ""}
+                      ima={active && !!rolnaA}
+                    />
+                    <MatRow label="Odmotač B"
+                      tip={matB ? matB.tip + " " + (matB.deb || "") + "mic" : "—"}
+                      sirina={idealSir}
+                      rolna={rolnaB ? rolnaB.br_rolne + " · " + (rolnaB.metraza_ost || 0).toLocaleString() + "m" : ""}
+                      lokacija={rolnaB ? rolnaB.palet || "—" : ""}
+                      ima={active && !!rolnaB}
+                    />
+                  </div>
+                </Sec>
+              );
+            })}
+
+            <Sec title="Parametri kaširanja">
+              <Grid cols={4}>
+                <Field label="Tip lepka" value={n.tipLepka || "PU solventni"} />
+                <Field label="Prečnik fin. rolne" value="do 800mm" />
+                <Field label="Ulaz materijala" value="Magacin" />
+                <Field label="Izlaz materijala" value="Rezanje" />
+              </Grid>
+            </Sec>
+
+            <Sec title="Napomene">
+              <div style={{ minHeight: 36, padding: 8, background: "#f8fafc", borderRadius: 5, border: "0.5px solid #e2e8f0", fontSize: 12, color: "#64748b" }}>
+                {n.nap || "Proveriti adheziju na nastavku svake rolne. Meriti nanos lepka svakih 2.000m. Prečnik finalne rolne max 800mm."}
+              </div>
+            </Sec>
+            <PotpisLinja />
+          </NalogCard>
+        )}
+
+        {/* ===== 4. PERFORACIJA ===== */}
+        {aktivniTab === "prf" && (
+          <NalogCard>
+            <Hdr naziv="Nalog za perforaciju" brNaloga={brN} suffix="-5" boja="#1a1a3a" kupac={kupac} datum={datum} />
+            <Sec title="Identifikacija">
+              <Grid cols={4} mb={8}>
+                <Field label="Radni nalog br." value={brN} color="blue" />
+                <Field label="Datum" value={datum} />
+                <Field label="Kupac" value={kupac} />
+                <Field label="Naziv proizvoda" value={naziv} />
+              </Grid>
+            </Sec>
+
+            <Sec title="Parametri perforacije">
+              <Grid cols={4} mb={8}>
+                <Field label="Tip perforacije" value={n.tipPerf || "—"} color={n.tipPerf ? "blue" : ""} />
+                <Field label="Oblik perforacije" value={n.oblikPerf || "—"} />
+                <Field label="Orijentacija" value={n.orjentPerf || "—"} />
+                <Field label="Razmak (mm)" value={n.razmakPerf || "—"} />
+              </Grid>
+              <Grid cols={4}>
+                <Field label="Širina materijala" value={idealSir + " mm"} />
+                <Field label="Količina za perf. (m)" value={zaRadM.toLocaleString()} />
+                <Field label="Brzina mašine (m/min)" value={n.brzinaPerf || "120"} />
+                <Field label="Vreme izrade" value={n.brzinaPerf ? Math.round(zaRadM / +n.brzinaPerf / 60 * 10) / 10 + "h" : "—"} color="green" />
+              </Grid>
+            </Sec>
+
+            <Sec title="Kontrola kvaliteta">
+              <Grid cols={3}>
+                <Field label="Sila kidanja (N)" value="Izmeriti i upisati" />
+                <Field label="Tačnost razmaka" value={n.razmakPerf ? n.razmakPerf + " ± 0,5mm" : "—"} />
+                <Field label="Vizuelna kontrola" value="Svakih 5.000m" />
+              </Grid>
+            </Sec>
+
+            <Sec title="Napomena">
+              <div style={{ minHeight: 36, padding: 8, background: "#f8fafc", borderRadius: 5, border: "0.5px solid #e2e8f0", fontSize: 12, color: "#64748b" }}>
+                {n.napPerf || n.nap || "Proveriti silu kidanja na početku i svakih 2.000m. Škart odvojiti i izmeriti."}
+              </div>
+            </Sec>
+
+            <Sec title="Napomena operatera (uneti na kraju)">
+              <div style={{ minHeight: 48, padding: 8, background: "#fffbeb", borderRadius: 5, border: "0.5px dashed #fde68a", fontSize: 12, color: "#92400e" }}>
+                &nbsp;
+              </div>
+            </Sec>
+            <PotpisLinja />
+          </NalogCard>
+        )}
+
+        {/* ===== 5. REZANJE ===== */}
+        {aktivniTab === "rez" && (
+          <NalogCard>
+            <Hdr naziv="Nalog za rezanje" brNaloga={brN} suffix="-4" boja="#1a2e1a" kupac={kupac} datum={datum} />
+            <Sec title="Identifikacija">
+              <Grid cols={4} mb={8}>
+                <Field label="Radni nalog br." value={brN} color="blue" />
+                <Field label="Datum" value={datum} />
+                <Field label="Kupac" value={kupac} />
+                <Field label="Kol. za rasecanje" value={(n.kolKg || "—") + " kg / " + zaRadM.toLocaleString() + " m"} />
+              </Grid>
+              <Grid cols={2}>
+                <Field label="Naziv proizvoda" value={naziv} />
+                <Field label="Sastav materijala" value={mats.map(function (m) { return m.tip + " " + (m.deb || "") + "mic"; }).join(" + ") || "—"} />
+              </Grid>
+            </Sec>
+
+            <Sec title="Parametri rezanja">
+              <Grid cols={4} mb={8}>
+                <Field label="Vrsta sečiva" value={n.secivo || "Žilet"} />
+                <Field label="Šir. matične rolne" value={idealSir + "mm iskoristivo"} color="blue" />
+                <Field label="Br. traka" value={n.rezBrTraka || "—"} />
+                <Field label="Strana namotavanja" value={n.stranaRez || "Štampa spolja"} />
+              </Grid>
+              <Grid cols={4}>
+                <Field label="Prečnik fin. rolne" value={n.precnikRolne || "do 600mm"} />
+                <Field label="Dužina fin. rolne" value={n.duzinaRolne || "do 5.000m"} />
+                <Field label="Korona tretman" value={n.korona || "Ne"} />
+                <Field label="Planiran br. rolni" value={n.rezBrTraka && n.duzinaRolne ? Math.ceil(zaRadM / +n.duzinaRolne) + " rolni" : "—"} color="green" />
+              </Grid>
+            </Sec>
+
+            {/* Šema rezanja */}
+            {n.rezFormati && n.rezFormati.length > 0 && (
+              <Sec title="Šema rezanja">
+                <div style={{ display: "flex", gap: 3, alignItems: "stretch", marginBottom: 8 }}>
+                  <div style={{ background: "#fef2f2", border: "0.5px solid #fecaca", borderRadius: 3, padding: "3px 5px", color: "#991b1b", fontSize: 9, display: "flex", alignItems: "center" }}>otpad</div>
+                  {n.rezFormati.map(function (f, i) {
+                    return (
+                      <div key={i} style={{ background: i % 2 === 0 ? "#dbeafe" : "#dcfce7", border: "0.5px solid " + (i % 2 === 0 ? "#93c5fd" : "#86efac"), borderRadius: 3, padding: "5px 10px", color: i % 2 === 0 ? "#1e40af" : "#166534", fontWeight: 600, fontSize: 11, textAlign: "center", flex: f.sirina }}>
+                        Format {["I", "II", "III", "IV", "V", "VI"][i]} — {f.sirina}mm
+                        <div style={{ fontSize: 9, fontWeight: 400 }}>{f.metraza ? f.metraza.toLocaleString() + "m" : ""} {f.napomena || ""}</div>
+                      </div>
+                    );
+                  })}
+                  <div style={{ background: "#fef2f2", border: "0.5px solid #fecaca", borderRadius: 3, padding: "3px 5px", color: "#991b1b", fontSize: 9, display: "flex", alignItems: "center" }}>otpad</div>
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead><tr style={{ background: "#f8fafc", borderBottom: "0.5px solid #e2e8f0" }}>
+                    {["Format", "Širina (mm)", "Br. naloga", "Kupac / Naziv", "Metraža (m)", "Br. rolni", "Hilzna", "Izlaz"].map(function (h) {
+                      return <th key={h} style={{ padding: "5px 7px", textAlign: "left", color: "#64748b", fontWeight: 600 }}>{h}</th>;
+                    })}
+                  </tr></thead>
+                  <tbody>
+                    {n.rezFormati.map(function (f, i) {
+                      return (
+                        <tr key={i} style={{ borderBottom: "0.5px solid #f1f5f9" }}>
+                          <td style={{ padding: "5px 7px", fontWeight: 700 }}>{["I", "II", "III", "IV", "V", "VI"][i]}</td>
+                          <td style={{ padding: "5px 7px" }}>{f.sirina}</td>
+                          <td style={{ padding: "5px 7px", color: "#1d4ed8", fontWeight: 600 }}>{brN}-{["A", "B", "C", "D", "E"][i]}</td>
+                          <td style={{ padding: "5px 7px" }}>{kupac} · {f.naziv || naziv}</td>
+                          <td style={{ padding: "5px 7px", color: "#059669", fontWeight: 600 }}>{f.metraza ? f.metraza.toLocaleString() : "—"}</td>
+                          <td style={{ padding: "5px 7px", color: "#059669", fontWeight: 600 }}>{f.brRolni || "—"}</td>
+                          <td style={{ padding: "5px 7px" }}>{n.hilzna || "76mm"}</td>
+                          <td style={{ padding: "5px 7px" }}>{f.izlaz || "Magacin GP"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </Sec>
             )}
-            {[...Array(Math.max(2, 4 - mats.length))].map((_, i) => (
-              <tr key={"e" + i}>{[...Array(5)].map((_, j) => <td key={j} style={{ padding: "8px", border: "0.5px solid #e2e8f0", height: 28 }}></td>)}</tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr style={{ background: "#f8fafc", fontWeight: 700 }}>
-              <td colSpan={3} style={{ padding: "8px", border: "0.5px solid #e2e8f0", textAlign: "right", color: "#64748b" }}>UKUPNO:</td>
-              <td style={{ padding: "8px", border: "0.5px solid #e2e8f0", color: "#1d4ed8", fontWeight: 800 }}>{kolZaRad ? kolZaRad.toLocaleString() + " m" : "—"}</td>
-              <td style={{ padding: "8px", border: "0.5px solid #e2e8f0", color: "#059669", fontWeight: 800 }}>{res.det ? (res.det.reduce((s, m) => s + (m.tkg_nalog || 0), 0) + (res.ukLep_nalog || 0)).toFixed(2) + " kg" : "—"}</td>
-            </tr>
-          </tfoot>
-        </table>
-        <div style={{ ...F, borderLeft: "3px solid #f59e0b", marginBottom: 6 }}><div style={{ ...FL, color: "#92400e" }}>Napomena</div><div style={{ fontSize: 9, minHeight: 18 }}>{napomena || "—"}</div></div>
-        <Potpisi />
+
+            <Sec title="Pakovanje i označavanje">
+              <Grid cols={4} mb={8}>
+                <Field label="Rolne za isporuku" value={n.rolneIsporuka || "Sa nastavkom"} />
+                <Field label="Obeležavanje nastavaka" value={n.obelezavanje || "Crvena traka"} color="yellow" />
+                <Field label="Pakovanje rolni" value={n.pakovanjeRolni || "Svaka pojedinačno"} />
+                <Field label="Paleta" value={n.paleta || "Euro paleta"} />
+              </Grid>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {["1. Etiketa u hilznu", "2. Etiketa na rolnu", "3. Etiketa na omot"].map(function (x) {
+                  return <span key={x} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "#eff6ff", color: "#1e40af", border: "0.5px solid #bfdbfe" }}>{x}</span>;
+                })}
+                {n.kilazaRolne && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "#f0fdf4", color: "#166534", border: "0.5px solid #bbf7d0" }}>Na etiketu upisati kilažu rolne</span>}
+              </div>
+            </Sec>
+
+            <Sec title="Napomena &nbsp;/&nbsp; Napomena operatera">
+              <Grid cols={2}>
+                <div style={{ padding: 8, background: "#f8fafc", borderRadius: 5, border: "0.5px solid #e2e8f0", fontSize: 12, color: "#64748b", minHeight: 44 }}>
+                  {n.napRez || n.nap || "&nbsp;"}
+                </div>
+                <div style={{ padding: 8, background: "#fffbeb", borderRadius: 5, border: "0.5px dashed #fde68a", fontSize: 12, color: "#92400e", minHeight: 44 }}>
+                  Operater upisuje zapažanja...
+                </div>
+              </Grid>
+            </Sec>
+            <PotpisLinja />
+          </NalogCard>
+        )}
       </div>
     </div>
   );

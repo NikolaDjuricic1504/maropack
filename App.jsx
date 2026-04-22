@@ -6,6 +6,8 @@ import jsPDF from "jspdf";
 import Magacin from "./Magacin.jsx";
 import KalkulatorKese2 from "./KalkulatorKese2.jsx";
 import PracenjeNaloga from "./PracenjeNaloga.jsx";
+import NalogFolija from "./NalogFolija.jsx";
+import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1595,6 +1597,7 @@ export default function App() {
     {k:"ponude",l:"Ponude",i:"📄"},
     {k:"nalozi",l:"Radni nalozi",i:"🔧"},
             {k:"pracenje",l:"Praćenje",i:"🔴"},
+            {k:"novi_nalog",l:"Nalog iz baze",i:"⚡"},
             {k:"baza",l:"Baza proizvoda",i:"📦"},
             {k:"magacin",l:"Magacin",i:"🏭"},
       ];
@@ -1866,6 +1869,7 @@ export default function App() {
         {/* MAGACIN */}
         {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
         {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
+        {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
 
         {/* PODESAVANJA */}
         {page==="pod"&&user.uloga==="admin"&&(
