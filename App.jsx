@@ -3,13 +3,6 @@ import { supabase } from "./supabase.js";
 import { LOGO_B64, SPULNA_B64 } from "./constants.js";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import NalogFolija from "./NalogFolija.jsx";
-import NalogKesa from "./NalogKesa.jsx";
-import NalogSpulna from "./NalogSpulna.jsx";
-import NalogPerforacija from "./NalogPerforacija.jsx";
-import Magacin from "./Magacin.jsx";
-import KalkulatorKese2 from "./KalkulatorKese2.jsx";
-import PracenjeNaloga from "./PracenjeNaloga.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -940,17 +933,16 @@ function KalkulatorSpulne({user,msg,setPage,inp,card,lbl}) {
 }
 
 // ===================== PONUDE PAGE =====================
+
+// ===================== PONUDE PAGE =====================
 function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,pdfLoading,pregPonudaRef,downloadPDF,kreirajNalogeIzPonude,odbijPonudu,setPage,TIP_BOJA,TIP_LAB}) {
   var [filterKupac,setFilterKupac]=useState("");
   var [filterStatus,setFilterStatus]=useState("");
   var [filterTip,setFilterTip]=useState("");
   var [pretraga,setPretraga]=useState("");
-  var [editPonuda,setEditPonuda]=useState(null);
   var [brisanje,setBrisanje]=useState(null);
 
   var kupci=[...new Set(db.ponude.map(function(p){return p.kupac;}).filter(Boolean))].sort();
-  var statusi=["Aktivna","Odobrena","Odbijena"];
-  var tipovi=["folija","kesa","spulna"];
 
   var filtrirane=db.ponude.filter(function(p){
     return (!filterKupac||p.kupac===filterKupac)&&
@@ -959,7 +951,6 @@ function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,
            (!pretraga||(p.naziv||"").toLowerCase().includes(pretraga.toLowerCase())||(p.broj||"").toLowerCase().includes(pretraga.toLowerCase()));
   });
 
-  // Grupisanje po kupcu
   var poKupcu={};
   filtrirane.forEach(function(p){
     var k=p.kupac||"—";
@@ -969,8 +960,8 @@ function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,
 
   async function obrisiPonudu(id){
     try{
-      var {error}=await supabase.from('ponude').delete().eq('id',id);
-      if(error)throw error;
+      var res=await supabase.from('ponude').delete().eq('id',id);
+      if(res.error)throw res.error;
       setDb(function(d){return Object.assign({},d,{ponude:d.ponude.filter(function(p){return p.id!==id;})});});
       setBrisanje(null);
       setPregPonuda(null);
@@ -978,20 +969,9 @@ function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,
     }catch(e){msg("Greška: "+e.message,"err");}
   }
 
-  async function sacuvajIzmene(p){
-    try{
-      var {error}=await supabase.from('ponude').update({kupac:p.kupac,naziv:p.naziv,kol:p.kol,c1:p.c1,uk:p.uk,nap:p.nap,status:p.status,vaz:p.vaz}).eq('id',p.id);
-      if(error)throw error;
-      setDb(function(d){return Object.assign({},d,{ponude:d.ponude.map(function(x){return x.id===p.id?Object.assign({},x,p):x;})});});
-      setEditPonuda(null);
-      msg("Ponuda ažurirana!");
-    }catch(e){msg("Greška: "+e.message,"err");}
-  }
-
   var stBg=function(s){return s==="Aktivna"?"#fef9c3":s==="Odobrena"?"#dcfce7":"#fee2e2";};
   var stCl=function(s){return s==="Aktivna"?"#854d0e":s==="Odobrena"?"#166534":"#991b1b";};
 
-  // MODAL ZA BRISANJE
   if(brisanje){
     return(
       <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1008,43 +988,11 @@ function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,
     );
   }
 
-  // MODAL ZA IZMENU
-  if(editPonuda){
-    var ep=editPonuda;
-    return(
-      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-        <div style={{background:"#fff",borderRadius:16,padding:28,width:520,boxShadow:"0 20px 60px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"}}>
-          <div style={{fontSize:16,fontWeight:800,marginBottom:18,color:"#1d4ed8"}}>✏️ Izmena ponude {ep.broj}</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-            <div><label style={lbl}>Kupac</label><input style={inp} value={ep.kupac||""} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{kupac:v});});}/></div>
-            <div><label style={lbl}>Naziv</label><input style={inp} value={ep.naziv||""} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{naziv:v});});}/></div>
-            <div><label style={lbl}>Količina</label><input type="number" style={inp} value={ep.kol||""} onChange={function(e){var v=+e.target.value;setEditPonuda(function(p){return Object.assign({},p,{kol:v});});}/></div>
-            <div><label style={lbl}>Cena/jed.</label><input type="number" step="0.01" style={inp} value={ep.c1||""} onChange={function(e){var v=+e.target.value;setEditPonuda(function(p){return Object.assign({},p,{c1:v,uk:v*(+p.kol||1)});});}/></div>
-            <div><label style={lbl}>Ukupno €</label><input type="number" step="0.01" style={inp} value={ep.uk||""} onChange={function(e){var v=+e.target.value;setEditPonuda(function(p){return Object.assign({},p,{uk:v});});}/></div>
-            <div><label style={lbl}>Važi do</label><input style={inp} value={ep.vaz||""} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{vaz:v});});}/></div>
-            <div><label style={lbl}>Status</label>
-              <select style={inp} value={ep.status||"Aktivna"} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{status:v});})}}>
-                <option>Aktivna</option><option>Odobrena</option><option>Odbijena</option>
-              </select>
-            </div>
-          </div>
-          <div style={{marginBottom:14}}><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={ep.nap||""} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{nap:v});})}}/></div>
-          <div style={{display:"flex",gap:10}}>
-            <button style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){sacuvajIzmene(ep);}}>💾 Sacuvaj izmene</button>
-            <button style={{padding:"10px 18px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setEditPonuda(null);}}>Otkaži</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // PREGLED JEDNE PONUDE
   if(pregPonuda){
     return(
       <div>
         <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
           <button onClick={function(){setPregPonuda(null);}} style={{padding:"8px 16px",borderRadius:8,border:"1.5px solid #1d4ed8",background:"transparent",color:"#1d4ed8",cursor:"pointer",fontWeight:700,fontSize:13}}>← Nazad</button>
-          <button style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setEditPonuda(Object.assign({},pregPonuda));}}>✏️ Izmeni</button>
           <button style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#dc2626",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:pdfLoading?0.7:1}} onClick={function(){downloadPDF(pregPonudaRef,"Ponuda-"+(pregPonuda.broj||""));}}>
             {pdfLoading?"⏳ Generišem...":"⬇️ Preuzmi PDF"}
           </button>
@@ -1063,91 +1011,72 @@ function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,
     );
   }
 
-  // LISTA PONUDA
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <h2 style={{margin:0,fontSize:20,fontWeight:800}}>📄 Ponude</h2>
         <div style={{display:"flex",gap:8}}>
-          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>🧮 Folija</button>
-          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_kesa");}}>🛍️ Kesa</button>
-          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_spulna");}}>🔄 Špulna</button>
+          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>🧮 Nova folija</button>
+          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_kesa");}}>🛍️ Nova kesa</button>
+          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_spulna");}}>🔄 Nova špulna</button>
         </div>
       </div>
-
-      {/* FILTERI */}
       <div style={Object.assign({},card,{marginBottom:14,padding:"14px 16px"})}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-          <input style={Object.assign({},inp,{flex:1,minWidth:160})} placeholder="🔍 Pretraži po broju ili nazivu..." value={pretraga} onChange={function(e){setPretraga(e.target.value);}}/>
+          <input style={Object.assign({},inp,{flex:1,minWidth:160})} placeholder="🔍 Pretraži..." value={pretraga} onChange={function(e){setPretraga(e.target.value);}}/>
           <select style={Object.assign({},inp,{width:170})} value={filterKupac} onChange={function(e){setFilterKupac(e.target.value);}}>
             <option value="">👤 Svi kupci</option>
             {kupci.map(function(k){return <option key={k} value={k}>{k}</option>;})}
           </select>
           <select style={Object.assign({},inp,{width:140})} value={filterStatus} onChange={function(e){setFilterStatus(e.target.value);}}>
             <option value="">📊 Svi statusi</option>
-            {statusi.map(function(s){return <option key={s} value={s}>{s}</option>;})}
+            <option>Aktivna</option><option>Odobrena</option><option>Odbijena</option>
           </select>
           <select style={Object.assign({},inp,{width:130})} value={filterTip} onChange={function(e){setFilterTip(e.target.value);}}>
             <option value="">🏷️ Svi tipovi</option>
-            {tipovi.map(function(t){return <option key={t} value={t}>{TIP_LAB[t]||t}</option>;})}
+            <option value="folija">Folija</option><option value="kesa">Kesa</option><option value="spulna">Špulna</option>
           </select>
           {(filterKupac||filterStatus||filterTip||pretraga)&&(
             <button style={{padding:"8px 12px",borderRadius:7,border:"1px solid #e2e8f0",background:"#f8fafc",color:"#64748b",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setFilterKupac("");setFilterStatus("");setFilterTip("");setPretraga("");}}>✕ Reset</button>
           )}
-          <div style={{marginLeft:"auto",fontSize:12,color:"#64748b",fontWeight:600}}>{filtrirane.length} ponuda</div>
         </div>
       </div>
-
       {db.ponude.length===0?(
         <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
           <div style={{fontSize:36,marginBottom:10}}>📄</div>
-          <div style={{marginBottom:12}}>Nema ponuda. Kreirajte kroz kalkulator.</div>
-          <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-            <button style={{padding:"9px 18px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>🧮 Nova folija</button>
-            <button style={{padding:"9px 18px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_kesa");}}>🛍️ Nova kesa</button>
-            <button style={{padding:"9px 18px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_spulna");}}>🔄 Nova špulna</button>
-          </div>
-        </div>
-      ):filtrirane.length===0?(
-        <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
-          <div style={{fontSize:28,marginBottom:8}}>🔍</div>
-          <div>Nema rezultata za izabrane filtere.</div>
+          <div>Nema ponuda.</div>
         </div>
       ):(
         Object.keys(poKupcu).sort().map(function(kupac){
           var ponudeKupca=poKupcu[kupac];
-          var ukupnoKupac=ponudeKupca.reduce(function(s,p){return s+(+p.uk||0);},0);
+          var ukupno=ponudeKupca.reduce(function(s,p){return s+(+p.uk||0);},0);
           return(
             <div key={kupac} style={{marginBottom:16}}>
-              {/* Kupac header */}
-              <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",background:"#0f172a",borderRadius:"10px 10px 0 0",color:"#fff"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",background:"#0f172a",borderRadius:"10px 10px 0 0",color:"#fff"}}>
                 <span style={{fontSize:16}}>👤</span>
                 <span style={{fontWeight:800,fontSize:14}}>{kupac}</span>
                 <span style={{fontSize:12,color:"#94a3b8",marginLeft:4}}>{ponudeKupca.length} ponuda</span>
-                <span style={{marginLeft:"auto",fontWeight:700,fontSize:13,color:"#93c5fd"}}>{ukupnoKupac.toFixed(2).replace(".",",")} €</span>
+                <span style={{marginLeft:"auto",fontWeight:700,fontSize:13,color:"#93c5fd"}}>{ukupno.toFixed(2).replace(".",",")} €</span>
               </div>
-              {/* Tabela ponuda kupca */}
               <div style={{background:"#fff",borderRadius:"0 0 10px 10px",border:"1px solid #e2e8f0",borderTop:"none",overflow:"hidden"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                   <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                    {["Broj","Naziv","Tip","Kol.","Ukupno","Status","Datum","Važi do",""].map(function(h){return <th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11}}>{h}</th>;})}
+                    {["Broj","Naziv","Tip","Kol.","Ukupno","Status","Datum",""].map(function(h){return <th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11}}>{h}</th>;})}
                   </tr></thead>
                   <tbody>
                     {ponudeKupca.map(function(p){
                       return(
-                        <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9",cursor:"pointer"}} onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
-                          <td style={{padding:"9px 10px",fontWeight:700,color:"#1d4ed8",whiteSpace:"nowrap"}}>{p.broj}</td>
+                        <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9"}}>
+                          <td style={{padding:"9px 10px",fontWeight:700,color:"#1d4ed8"}}>{p.broj}</td>
                           <td style={{padding:"9px 10px",fontWeight:600,fontSize:12}}>{p.naziv}</td>
                           <td style={{padding:"9px 10px"}}><span style={{background:(TIP_BOJA[p.tip]||"#64748b")+"20",color:TIP_BOJA[p.tip]||"#64748b",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:10}}>{TIP_LAB[p.tip]||"—"}</span></td>
                           <td style={{padding:"9px 10px",color:"#64748b"}}>{(p.kol||0).toLocaleString()}</td>
                           <td style={{padding:"9px 10px",fontWeight:700,color:"#059669"}}>{eu(p.uk)}</td>
                           <td style={{padding:"9px 10px"}}><span style={{background:stBg(p.status),color:stCl(p.status),borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:11}}>{p.status}</span></td>
-                          <td style={{padding:"9px 10px",color:"#64748b",fontSize:12,whiteSpace:"nowrap"}}>{p.datum}</td>
-                          <td style={{padding:"9px 10px",color:"#64748b",fontSize:12,whiteSpace:"nowrap"}}>{p.vaz||"—"}</td>
+                          <td style={{padding:"9px 10px",color:"#64748b",fontSize:12}}>{p.datum}</td>
                           <td style={{padding:"9px 10px"}}>
                             <div style={{display:"flex",gap:5}}>
                               <button style={{padding:"4px 10px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPregPonuda(p);}}>👁️</button>
-                              <button style={{padding:"4px 10px",borderRadius:6,border:"none",background:"#f59e0b",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setEditPonuda(Object.assign({},p));}}>✏️</button>
                               <button style={{padding:"4px 10px",borderRadius:6,border:"none",background:"#ef4444",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setBrisanje(p);}}>🗑️</button>
                             </div>
                           </td>
@@ -1170,14 +1099,13 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
   var [filterKupac,setFilterKupac]=useState("");
   var [filterTip,setFilterTip]=useState("");
   var [pretraga,setPretraga]=useState("");
-  var [brisanje,setBrisanje]=useState(null);
 
   var kupci=[...new Set(db.proizvodi.map(function(p){return p.kupac;}).filter(Boolean))].sort();
 
   var filtrirani=db.proizvodi.filter(function(p){
     return (!filterKupac||p.kupac===filterKupac)&&
            (!filterTip||p.tip===filterTip)&&
-           (!pretraga||(p.naziv||"").toLowerCase().includes(pretraga.toLowerCase())||(p.kupac||"").toLowerCase().includes(pretraga.toLowerCase()));
+           (!pretraga||(p.naziv||"").toLowerCase().includes(pretraga.toLowerCase()));
   });
 
   var poKupcu={};
@@ -1187,34 +1115,8 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
     poKupcu[k].push(p);
   });
 
-  async function obrisiProizvod(id){
-    try{
-      var {error}=await supabase.from('proizvodi').delete().eq('id',id);
-      if(error)throw error;
-      setDb(function(d){return Object.assign({},d,{proizvodi:d.proizvodi.filter(function(p){return p.id!==id;})});});
-      setBrisanje(null);
-      msg("Proizvod obrisan!");
-    }catch(e){msg("Greška: "+e.message,"err");}
-  }
-
-  const BOJE=["#1d4ed8","#7c3aed","#0891b2","#059669"];
-  const SLOJ=["A","B","C","D"];
-
-  if(brisanje){
-    return(
-      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"#fff",borderRadius:16,padding:32,width:380,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
-          <div style={{fontSize:36,marginBottom:12}}>🗑️</div>
-          <div style={{fontSize:16,fontWeight:700,marginBottom:8}}>Obriši proizvod?</div>
-          <div style={{fontSize:13,color:"#64748b",marginBottom:20}}><b>{brisanje.naziv}</b> će biti trajno obrisan iz baze.</div>
-          <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-            <button style={{padding:"10px 24px",borderRadius:8,border:"none",background:"#ef4444",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){obrisiProizvod(brisanje.id);}}>Da, obriši</button>
-            <button style={{padding:"10px 24px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setBrisanje(null);}}>Otkaži</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  var BOJE=["#1d4ed8","#7c3aed","#0891b2","#059669"];
+  var SLOJ=["A","B","C","D"];
 
   return(
     <div>
@@ -1222,44 +1124,34 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
         <h2 style={{margin:0,fontSize:20,fontWeight:800}}>📦 Baza proizvoda</h2>
         <div style={{fontSize:13,color:"#64748b",fontWeight:600}}>{filtrirani.length} / {db.proizvodi.length} proizvoda</div>
       </div>
-
-      {/* FILTERI */}
       <div style={Object.assign({},card,{marginBottom:14,padding:"14px 16px"})}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-          <input style={Object.assign({},inp,{flex:1,minWidth:160})} placeholder="🔍 Pretraži po nazivu ili kupcu..." value={pretraga} onChange={function(e){setPretraga(e.target.value);}}/>
+          <input style={Object.assign({},inp,{flex:1,minWidth:160})} placeholder="🔍 Pretraži..." value={pretraga} onChange={function(e){setPretraga(e.target.value);}}/>
           <select style={Object.assign({},inp,{width:170})} value={filterKupac} onChange={function(e){setFilterKupac(e.target.value);}}>
             <option value="">👤 Svi kupci</option>
             {kupci.map(function(k){return <option key={k} value={k}>{k}</option>;})}
           </select>
           <select style={Object.assign({},inp,{width:140})} value={filterTip} onChange={function(e){setFilterTip(e.target.value);}}>
             <option value="">🏷️ Svi tipovi</option>
-            <option value="folija">Folija</option>
-            <option value="kesa">Kesa</option>
-            <option value="spulna">Špulna</option>
+            <option value="folija">Folija</option><option value="kesa">Kesa</option><option value="spulna">Špulna</option>
           </select>
           {(filterKupac||filterTip||pretraga)&&(
             <button style={{padding:"8px 12px",borderRadius:7,border:"1px solid #e2e8f0",background:"#f8fafc",color:"#64748b",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setFilterKupac("");setFilterTip("");setPretraga("");}}>✕ Reset</button>
           )}
         </div>
       </div>
-
       {db.proizvodi.length===0?(
         <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
           <div style={{fontSize:36,marginBottom:10}}>📦</div>
-          <div style={{marginBottom:12}}>Baza je prazna. Sačuvajte kalkulaciju da dodate proizvod.</div>
+          <div style={{marginBottom:12}}>Baza je prazna.</div>
           <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>+ Nova kalkulacija</button>
-        </div>
-      ):filtrirani.length===0?(
-        <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
-          <div style={{fontSize:28,marginBottom:8}}>🔍</div>
-          <div>Nema rezultata za izabrane filtere.</div>
         </div>
       ):(
         Object.keys(poKupcu).sort().map(function(kupac){
           var proizvKupca=poKupcu[kupac];
           return(
             <div key={kupac} style={{marginBottom:16}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",background:"#0f172a",borderRadius:"10px 10px 0 0",color:"#fff"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",background:"#0f172a",borderRadius:"10px 10px 0 0",color:"#fff"}}>
                 <span style={{fontSize:16}}>👤</span>
                 <span style={{fontWeight:800,fontSize:14}}>{kupac}</span>
                 <span style={{fontSize:12,color:"#94a3b8",marginLeft:4}}>{proizvKupca.length} {proizvKupca.length===1?"proizvod":"proizvoda"}</span>
@@ -1269,9 +1161,7 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
                   var mats=(p.mats||[]).filter(function(m){return m.tip;});
                   return(
                     <div key={p.id} style={{padding:"14px 16px",borderBottom:pi<proizvKupca.length-1?"1px solid #f1f5f9":"none",display:"flex",gap:14,alignItems:"flex-start"}}>
-                      {/* Tip badge */}
                       <span style={{background:(TIP_BOJA[p.tip]||"#64748b")+"20",color:TIP_BOJA[p.tip]||"#64748b",borderRadius:6,padding:"3px 10px",fontWeight:700,fontSize:10,flexShrink:0,marginTop:2}}>{TIP_LAB[p.tip]||"—"}</span>
-                      {/* Info */}
                       <div style={{flex:1}}>
                         <div style={{fontWeight:800,fontSize:14,marginBottom:4}}>{p.naziv}</div>
                         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -1279,29 +1169,21 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
                             return(
                               <span key={i} style={{fontSize:11,background:BOJE[i]+"15",color:BOJE[i],borderRadius:5,padding:"2px 7px",fontWeight:700}}>
                                 {SLOJ[i]}: {m.tip} {m.deb}µ
-                                {m.kas>0&&" 🔗"+m.kas+"×"}
-                                {m.lak>0&&" ✨"+m.lak+"×"}
-                                {m.stamp&&" 🖨️"}
                               </span>
                             );
                           })}
                           {p.sir&&<span style={{fontSize:11,color:"#64748b",padding:"2px 7px",background:"#f1f5f9",borderRadius:5}}>📏 {p.sir}mm</span>}
-                          {p.datum&&<span style={{fontSize:11,color:"#94a3b8",padding:"2px 7px"}}>📅 {p.datum}</span>}
-                          {p.ko&&<span style={{fontSize:11,color:"#94a3b8",padding:"2px 7px"}}>👤 {p.ko}</span>}
                         </div>
                       </div>
-                      {/* Cena */}
                       {p.res&&p.res.k1&&(
                         <div style={{textAlign:"right",flexShrink:0}}>
                           <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>Cena/1000m</div>
                           <div style={{fontSize:18,fontWeight:800,color:"#1d4ed8"}}>{eu(p.res.k1)}</div>
                         </div>
                       )}
-                      {/* Akcije */}
                       <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
                         <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("kalk_folija");}}>📋 Otvori</button>
                         <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#059669",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("novi_nalog");}}>⚡ Nalog</button>
-                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#fef2f2",color:"#ef4444",cursor:"pointer",fontSize:11,fontWeight:700,border:"1px solid #fca5a5"}} onClick={function(){setBrisanje(p);}}>🗑️</button>
                       </div>
                     </div>
                   );
@@ -1315,7 +1197,6 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
   );
 }
 
-// ===================== GLAVNA APLIKACIJA =====================
 export default function App() {
   const [user,setUser]=useState(null);
   const [page,setPage]=useState("dash");
@@ -1327,7 +1208,6 @@ export default function App() {
   const [pregNalog,setPregNalog]=useState(null);
   const [pregPonuda,setPregPonuda]=useState(null);
   const [stampa,setStampa]=useState(null);
-  const [aktivniNalog,setAktivniNalog]=useState(null); // {nalog, tip: 'folija'|'kesa'|'spulna'|'perforacija'}
   const [uploading,setUploading]=useState(null);
   const [pdfLoading,setPdfLoading]=useState(false);
   const pregPonudaRef=useRef(null);
@@ -1457,21 +1337,14 @@ export default function App() {
     {k:"kalk_spulna",l:"Kalk. špulne",i:"🔄"},
     {k:"ponude",l:"Ponude",i:"📄"},
     {k:"nalozi",l:"Radni nalozi",i:"🔧"},
-    {k:"pracenje",l:"Praćenje",i:"🔴"},
-    {k:"novi_nalog",l:"Nalog iz baze",i:"⚡"},
-    {k:"baza",l:"Baza proizvoda",i:"📦"},
-    {k:"magacin",l:"Magacin",i:"🏭"},
-  ];
+            {k:"baza",l:"Baza proizvoda",i:"📦"},
+      ];
   if(user.uloga==="admin")nav.push({k:"pod",l:"Podešavanja",i:"⚙️"});
 
   return (
     <div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"'Segoe UI',system-ui,sans-serif",color:"#1e293b",display:"flex"}}>
       {notif&&<Notif msg={notif.msg} tip={notif.tip}/>}
       {stampa&&<PrintA4 data={stampa} onClose={function(){setStampa(null);}}/>}
-      {aktivniNalog&&aktivniNalog.tip==="folija"&&<NalogFolija nalog={aktivniNalog.nalog} onClose={function(){setAktivniNalog(null);}}/>}
-      {aktivniNalog&&aktivniNalog.tip==="kesa"&&<NalogKesa nalog={aktivniNalog.nalog} onClose={function(){setAktivniNalog(null);}}/>}
-      {aktivniNalog&&aktivniNalog.tip==="spulna"&&<NalogSpulna nalog={aktivniNalog.nalog} onClose={function(){setAktivniNalog(null);}}/>}
-      {aktivniNalog&&aktivniNalog.tip==="perforacija"&&<NalogPerforacija nalog={aktivniNalog.nalog} onClose={function(){setAktivniNalog(null);}} msg={msg}/>}
 
       {/* SIDEBAR */}
       <div style={{width:210,background:"#0f172a",display:"flex",flexDirection:"column",flexShrink:0,minHeight:"100vh"}}>
@@ -1551,11 +1424,7 @@ export default function App() {
 
         {/* KALKULATORI */}
         {page==="kalk_folija"&&<KalkulatorFolije user={user} db={db} setDb={setDb} setPage={setPage} msg={msg} inp={inp} card={card} lbl={lbl}/>}
-        {page==="kalk_kesa"&&<KalkulatorKese2 user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
         {page==="kalk_spulna"&&<KalkulatorSpulne user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
-        {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
-        {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl} dnow={dnow}/>}
-        {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} setAktivniNalog={setAktivniNalog} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
 
         {/* PONUDE */}
         {page==="ponude"&&(
@@ -1602,7 +1471,6 @@ export default function App() {
                         if(tipNaloga==="kesa") tip="kesa";
                         else if(tipNaloga==="spulna") tip="spulna";
                         else if(nazivNaloga.toLowerCase().includes("perf")) tip="perforacija";
-                        setAktivniNalog({nalog:pregNalog, tip:tip});
                       }} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#8b5cf6",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>
                         📄 Otvori radni nalog
                       </button>
