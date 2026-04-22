@@ -7,6 +7,9 @@ import NalogFolija from "./NalogFolija.jsx";
 import NalogKesa from "./NalogKesa.jsx";
 import NalogSpulna from "./NalogSpulna.jsx";
 import NalogPerforacija from "./NalogPerforacija.jsx";
+import Magacin from "./Magacin.jsx";
+import KalkulatorKese2 from "./KalkulatorKese2.jsx";
+import PraćenjeNaloga from "./PraćenjeNaloga.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -316,6 +319,121 @@ function PrintA4({data,onClose}) {
   );
 }
 
+// ===================== NALOG IZ BAZE (bez ponude) =====================
+function NoviNalogIzBaze({user,db,msg,setPage,inp,card,lbl,dnow}) {
+  const [izabranProiz,setIzabranProiz]=useState(null);
+  const [kupac,setKupac]=useState("");
+  const [kol,setKol]=useState("");
+  const [datumIsp,setDatumIsp]=useState("");
+  const [napomena,setNapomena]=useState("");
+  const [filter,setFilter]=useState("");
+
+  var filtrirani=db.proizvodi.filter(function(p){
+    return !filter||p.naziv.toLowerCase().includes(filter.toLowerCase())||((p.kupac||"").toLowerCase().includes(filter.toLowerCase()));
+  });
+
+  async function kreirajNaloge(){
+    if(!izabranProiz){msg("Izaberite proizvod!","err");return;}
+    if(!kupac.trim()){msg("Unesite kupca!","err");return;}
+    if(!kol||+kol<=0){msg("Unesite količinu!","err");return;}
+    var p=izabranProiz;
+    var vm=(p.mats||[]).filter(function(m){return m.tip;});
+    var brKas=vm.reduce(function(s,m){return s+(+m.kas||0);},0);
+    var brLak=vm.reduce(function(s,m){return s+(+m.lak||0);},0);
+    var hasSt=vm.some(function(m){return m.stamp;});
+    var brNaloga="MP-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9000)+1000);
+    var tipovi=[];
+    tipovi.push({naziv:"Nalog za materijal",ik:"box",boj:"#f59e0b"});
+    if(hasSt)tipovi.push({naziv:"Nalog za stampu",ik:"print",boj:"#3b82f6"});
+    for(var i=1;i<=brKas;i++)tipovi.push({naziv:"Nalog za kasiranje "+i,ik:"link",boj:"#1d4ed8"});
+    tipovi.push({naziv:"Nalog za rezanje",ik:"cut",boj:"#6366f1"});
+    tipovi.push({naziv:"Nalog za perforaciju",ik:"circle",boj:"#8b5cf6"});
+    if(brLak>0)tipovi.push({naziv:"Nalog za lakiranje",ik:"star",boj:"#7c3aed"});
+    var novi=tipovi.map(function(t){
+      return {ponBr:brNaloga,ponId:null,kupac:kupac,prod:p.naziv,naziv:t.naziv,ik:t.ik,boj:t.boj,status:"Ceka",datum:dnow(),radnik:"",nap:napomena,kol:+kol*1000,mats:p.mats,tip:p.tip||"folija",datumIsp:datumIsp};
+    });
+    try{
+      const {error}=await supabase.from('nalozi').insert(novi);
+      if(error)throw error;
+      msg("Kreirano "+novi.length+" naloga iz baze!");
+      setPage("nalozi");
+    }catch(e){msg("Greška: "+e.message,"err");}
+  }
+
+  return(
+    <div>
+      <h2 style={{margin:"0 0 18px",fontSize:20,fontWeight:800}}>⚡ Nalog iz baze proizvoda</h2>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        {/* Lista proizvoda */}
+        <div style={card}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📦 Izaberi proizvod</div>
+          <input style={Object.assign({},inp,{marginBottom:10})} placeholder="Pretraži po nazivu ili kupcu..." value={filter} onChange={function(e){setFilter(e.target.value);}}/>
+          <div style={{maxHeight:400,overflowY:"auto"}}>
+            {filtrirani.length===0?(
+              <div style={{textAlign:"center",padding:30,color:"#94a3b8"}}>Nema proizvoda u bazi.</div>
+            ):filtrirani.map(function(p){
+              var sel=izabranProiz&&izabranProiz.id===p.id;
+              return(
+                <div key={p.id} onClick={function(){setIzabranProiz(p);if(p.kupac)setKupac(p.kupac);}} style={{padding:"10px 12px",borderRadius:8,border:"1.5px solid "+(sel?"#1d4ed8":"#e2e8f0"),background:sel?"#eff6ff":"#f8fafc",cursor:"pointer",marginBottom:6}}>
+                  <div style={{fontWeight:700,fontSize:13,color:sel?"#1d4ed8":"#0f172a"}}>{p.naziv}</div>
+                  <div style={{fontSize:11,color:"#64748b",marginTop:2}}>
+                    {p.kupac&&<span style={{marginRight:10}}>👤 {p.kupac}</span>}
+                    {(p.mats||[]).filter(function(m){return m.tip;}).map(function(m){return m.tip+" "+m.deb+"µ";}).join(" / ")}
+                  </div>
+                  {p.res&&p.res.k1&&<div style={{fontSize:11,fontWeight:700,color:"#059669",marginTop:2}}>{(+p.res.k1).toFixed(2).replace(".",",")} € / 1000m</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Detalji i kreiranje */}
+        <div>
+          {izabranProiz?(
+            <>
+              <div style={Object.assign({},card,{marginBottom:14,background:"#eff6ff",border:"1.5px solid #bfdbfe"})}>
+                <div style={{fontSize:13,fontWeight:700,marginBottom:10,color:"#1d4ed8"}}>📋 Izabran: {izabranProiz.naziv}</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12}}>
+                  {(izabranProiz.mats||[]).filter(function(m){return m.tip;}).map(function(m,i){
+                    return(
+                      <div key={i} style={{padding:"6px 8px",background:"#fff",borderRadius:6,border:"1px solid #bfdbfe"}}>
+                        <span style={{fontWeight:700,color:["#1d4ed8","#7c3aed","#0891b2","#059669"][i]}}>{["A","B","C","D"][i]}: </span>
+                        <span style={{fontWeight:600}}>{m.tip} {m.deb}µ</span>
+                        {m.kas>0&&<span style={{color:"#1d4ed8",marginLeft:4}}>🔗{m.kas}×</span>}
+                        {m.lak>0&&<span style={{color:"#7c3aed",marginLeft:4}}>✨{m.lak}×</span>}
+                        {m.stamp&&<span style={{color:"#0891b2",marginLeft:4}}>🖨️</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={card}>
+                <div style={{fontSize:13,fontWeight:700,marginBottom:12}}>🔧 Parametri naloga</div>
+                <div style={{display:"grid",gap:10}}>
+                  <div><label style={lbl}>Kupac *</label><input style={inp} value={kupac} onChange={function(e){setKupac(e.target.value);}} placeholder="Naziv kupca"/></div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    <div><label style={lbl}>Nalog x1000m *</label><input type="number" style={inp} value={kol} onChange={function(e){setKol(e.target.value);}}/></div>
+                    <div><label style={lbl}>Datum isporuke</label><input style={inp} value={datumIsp} onChange={function(e){setDatumIsp(e.target.value);}}/></div>
+                  </div>
+                  <div><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={napomena} onChange={function(e){setNapomena(e.target.value);}}/></div>
+                </div>
+                <button style={{width:"100%",marginTop:14,padding:"12px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}} onClick={kreirajNaloge}>
+                  🔧 Kreiraj radne naloge
+                </button>
+              </div>
+            </>
+          ):(
+            <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
+              <div style={{fontSize:36,marginBottom:10}}>⚡</div>
+              <div>Izaberite proizvod iz liste levo</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ===================== KALKULATOR FOLIJE =====================
 function KalkulatorFolije({user,db,setDb,setPage,msg,inp,card,lbl}) {
   const [mats,setMats]=useState([Object.assign({},EM)]);
@@ -607,145 +725,221 @@ function KalkulatorSpulne({user,msg,setPage,inp,card,lbl}) {
   const [naziv,setNaziv]=useState("");
   const [kupac,setKupac]=useState("");
   const [materijal,setMaterijal]=useState("");
-  const [sirinaM,setSirinaM]=useState("");
-  const [W,setW]=useState("");
-  const [da,setDa]=useState("");
-  const [di,setDi]=useState("");
-  const [C,setC]=useState("");
-  const [G,setG]=useState("");
-  const [T,setT]=useState("");
-  const [D,setD]=useState("");
+  const [sirinaM,setSirinaM]=useState(360);
+  const [W,setW]=useState(25);
+  const [da,setDa]=useState(158);
+  const [di,setDi]=useState(152);
+  const [C,setC]=useState(0);
+  const [G,setG]=useState(0);
+  const [T,setT]=useState(180);
+  const [D,setD]=useState(380);
   const [sideA,setSideA]=useState("Papir");
   const [sideB,setSideB]=useState("Silikon");
-  const [maxMetara,setMaxMetara]=useState("");
-  const [cenaKg,setCenaKg]=useState("");
+  const [maxMetara,setMaxMetara]=useState(8000);
+  const [gramatura,setGramatura]=useState(60);
+  const [cenaKg,setCenaKg]=useState(2.7);
+  const [nalog,setNalog]=useState(100);
+  const [sk,setSk]=useState(10);
   const [mar,setMar]=useState(40);
+  const [pTr,setPTr]=useState(0.3);
+  const [pPak,setPPak]=useState(0.2);
   const [nap,setNap]=useState("");
+  const [ktab,setKtab]=useState("unos");
   const [res,setRes]=useState(null);
-  const [sacuvanoId,setSacuvanoId]=useState(null);
+  const [aktivna,setAktivna]=useState(null);
+  const [pkupac,setPkupac]=useState("");
+  const [padr,setPadr]=useState("");
+  const [pkon,setPkon]=useState("");
+  const [pnap,setPnap]=useState("");
+  const [pjez,setPjez]=useState("sr");
 
-  const calc=useCallback(function(){
-    if(!W||!da||!di||!sirinaM||!maxMetara||!cenaKg){setRes(null);return;}
-    // Broj špulni za 1000m²
-    var w=+W/1000; // sirina trake u m
+  useEffect(function(){
+    if(!W||!maxMetara||!gramatura||!cenaKg||!sirinaM){setRes(null);return;}
+    var w=+W/1000;
     var mPerSpulna=+maxMetara;
     var m2PerSpulna=w*mPerSpulna;
-    // Cena materijala po m²
-    var gramatura=60; // default papir 60gr
-    var kgPerM2=gramatura/1000;
-    var cenaM2=kgPerM2*(+cenaKg);
-    var osnM2=cenaM2;
-    var osn1000m2=osnM2*1000;
+    var kgPerM2=+gramatura/1000;
+    var kgPerSpulna=kgPerM2*(+sirinaM/1000)*mPerSpulna;
+    var ukM2=(+sirinaM/1000)*(+nalog)*1000;
+    var brSpulni=Math.ceil(ukM2/m2PerSpulna);
+    var ukKg=kgPerM2*ukM2;
+    var ukMat=ukKg*(+cenaKg);
+    var ukTr=(+pTr)*ukKg;
+    var ukPk=+pPak;
+    var osn=ukMat+ukTr+ukPk;
+    var osn_m2=ukM2>0?osn/ukM2:0;
+    var osn_1000m2=osn_m2*1000;
+    var osn_kg=ukKg>0?osn/ukKg:0;
+    var sas=osn*(1+(+sk/100));
     var mf=1+(+mar/100);
-    var cena1000m2=osn1000m2*mf;
-    setRes({w:w,mPerSpulna:mPerSpulna,m2PerSpulna:m2PerSpulna,cenaM2:cenaM2,osn1000m2:osn1000m2,cena1000m2:cena1000m2});
-  },[W,da,di,sirinaM,maxMetara,cenaKg,mar]);
+    var kn=sas*mf;
+    var k_1000m2=(sas/ukM2)*1000*mf;
+    var kkg=ukKg>0?(kn/ukKg):0;
+    setRes({w,mPerSpulna,m2PerSpulna,kgPerSpulna,brSpulni,ukKg,ukM2,ukMat,ukTr,ukPk,osn,osn_m2,osn_1000m2,osn_kg,sas,kn,k_1000m2,kkg});
+  },[W,maxMetara,gramatura,cenaKg,sirinaM,nalog,sk,mar,pTr,pPak]);
 
-  useEffect(function(){calc();},[calc]);
+  const f2l=function(v){return (!v||isNaN(v))?"—":(+v).toFixed(2).replace(".",",");};
+  const eu=function(v){return f2l(v)+" €";};
 
   async function sacuvaj(){
     if(!naziv.trim()){msg("Unesite naziv!","err");return;}
-    var p={naziv:naziv,kupac:kupac,materijal:materijal,sirina_mat:+sirinaM,W:+W,da:+da,di:+di,C:+C,G:+G,T:+T,D:+D,side_a:sideA,side_b:sideB,max_metara:+maxMetara,napomena:nap,datum:dnow(),ko:user.ime};
-    try{const {data,error}=await supabase.from('spulne').insert([p]).select();if(error)throw error;setSacuvanoId(data[0].id);msg("Špulna sacuvana!");}
-    catch(e){msg("Greska: "+e.message,"err");}
+    var p={naziv,kupac,materijal,sirina_mat:+sirinaM,W:+W,da:+da,di:+di,C:+C,G:+G,T:+T,D:+D,side_a:sideA,side_b:sideB,max_metara:+maxMetara,napomena:nap,datum:new Date().toLocaleDateString("sr-RS"),ko:user.ime};
+    try{const {error}=await supabase.from('spulne').insert([p]);if(error)throw error;msg("Špulna sacuvana!");}
+    catch(e){msg("Greška: "+e.message,"err");}
   }
 
-  async function kreirajPonuduSpulna(){
-    if(!naziv.trim()){msg("Unesite naziv!","err");return;}
-    msg("Ponuda za špulne - u izradi","err");
+  async function kreirajPonudu(){
+    if(!naziv.trim()||!pkupac.trim()){msg("Unesite naziv i kupca!","err");return;}
+    if(!res){msg("Najpre završiti kalkulaciju!","err");return;}
+    var p={broj:"MP-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9000)+1000),datum:new Date().toLocaleDateString("sr-RS"),vaz:new Date(Date.now()+30*24*3600000).toLocaleDateString("sr-RS"),kupac:pkupac,adr:padr,kon:pkon,naziv,kol:res.brSpulni,c1:res.k_1000m2,uk:res.kn,mats:[],nap:pnap,jez:pjez,status:"Aktivna",ko:user.ime,res:Object.assign({},res),tip:"spulna"};
+    try{const {data,error}=await supabase.from('ponude').insert([p]).select();if(error)throw error;setAktivna(data[0]);msg("Ponuda kreirana!");}
+    catch(e){msg("Greška: "+e.message,"err");}
   }
 
-  return (
+  return(
     <div>
-      <h2 style={{margin:"0 0 18px",fontSize:20,fontWeight:800}}>🔄 Kalkulator špulne</h2>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        {/* Leva kolona - podaci */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+        <h2 style={{margin:0,fontSize:20,fontWeight:800}}>🔄 Kalkulator špulne</h2>
+        <div style={{display:"flex",gap:6}}>
+          {[["unos","📋 Unos"],["param","⚙️ Parametri"],["pon","📄 Ponuda"],["rez","📊 Rezultati"]].map(function(t){
+            return <button key={t[0]} onClick={function(){setKtab(t[0]);}} style={{padding:"7px 14px",borderRadius:7,border:ktab===t[0]?"none":"1px solid #e2e8f0",cursor:"pointer",fontSize:12,fontWeight:700,background:ktab===t[0]?"#7c3aed":"#fff",color:ktab===t[0]?"#fff":"#64748b"}}>{t[1]}</button>;
+          })}
+        </div>
+      </div>
+
+      {ktab==="unos"&&(
         <div>
           <div style={Object.assign({},card,{marginBottom:14})}>
-            <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📋 Osnovni podaci</div>
-            <div style={{display:"grid",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               <div><label style={lbl}>Naziv *</label><input style={inp} value={naziv} onChange={function(e){setNaziv(e.target.value);}} placeholder="npr. Trake 25mm - 8000m"/></div>
-              <div><label style={lbl}>Kupac</label><input style={inp} value={kupac} onChange={function(e){setKupac(e.target.value);}} placeholder="Naziv kupca"/></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div><label style={lbl}>Materijal</label><input style={inp} value={materijal} onChange={function(e){setMaterijal(e.target.value);}} placeholder="npr. Papir 60gr"/></div>
-                <div><label style={lbl}>Širina materijala mm</label><input type="number" style={inp} value={sirinaM} onChange={function(e){setSirinaM(e.target.value);}}/></div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div><label style={lbl}>Kupac</label><input style={inp} value={kupac} onChange={function(e){setKupac(e.target.value);}}/></div>
+              <div><label style={lbl}>Materijal</label><input style={inp} value={materijal} onChange={function(e){setMaterijal(e.target.value);}} placeholder="npr. Papir silikonizani 60gr"/></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 <div><label style={lbl}>Side A</label><input style={inp} value={sideA} onChange={function(e){setSideA(e.target.value);}}/></div>
                 <div><label style={lbl}>Side B</label><input style={inp} value={sideB} onChange={function(e){setSideB(e.target.value);}}/></div>
               </div>
             </div>
           </div>
-          <div style={Object.assign({},card,{marginBottom:14})}>
-            <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📐 Dimenzije špulne</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              {[["W - širina trake (mm)",W,setW],["da - spoljašnji prečnik hilzne (mm)",da,setDa],["di - unutrašnji prečnik hilzne (mm)",di,setDi],["C - (mm)",C,setC],["G - gap (mm)",G,setG],["T - širina hilzne (mm)",T,setT],["D - max prečnik špulne (mm)",D,setD],["Max metara na špulni",maxMetara,setMaxMetara]].map(function(x){
-                return <div key={x[0]}><label style={lbl}>{x[0]}</label><input type="number" style={inp} value={x[1]} onChange={function(e){x[2](e.target.value);}}/></div>;
-              })}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            <div style={card}>
+              <div style={{fontSize:14,fontWeight:700,marginBottom:12,color:"#7c3aed"}}>📐 Dimenzije špulne</div>
+              <img src={SPULNA_B64} alt="Skica" style={{width:"100%",borderRadius:8,border:"1px solid #e2e8f0",marginBottom:12}}/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[["W - širina trake mm",W,setW],["da - spoljašnji prečnik hilzne mm",da,setDa],["di - unutrašnji prečnik mm",di,setDi],["C mm",C,setC],["G - gap mm",G,setG],["T - širina hilzne mm",T,setT],["D - max prečnik mm",D,setD],["Širina materijala mm",sirinaM,setSirinaM],["Max metara na špulni",maxMetara,setMaxMetara]].map(function(x){
+                  return <div key={x[0]}><label style={lbl}>{x[0]}</label><input type="number" style={inp} value={x[1]} onChange={function(e){x[2](e.target.value);}}/></div>;
+                })}
+              </div>
             </div>
-          </div>
-          <div style={Object.assign({},card,{marginBottom:14})}>
-            <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>💰 Cena i marža</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div><label style={lbl}>Cena materijala EUR/kg</label><input type="number" style={inp} value={cenaKg} step={0.1} onChange={function(e){setCenaKg(e.target.value);}}/></div>
-              <div><label style={lbl}>Marža %</label><input type="number" style={inp} value={mar} step={1} onChange={function(e){setMar(e.target.value);}}/></div>
+            <div>
+              <div style={Object.assign({},card,{marginBottom:14})}>
+                <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📦 Materijal i nalog</div>
+                <div style={{display:"grid",gap:10}}>
+                  {[["Gramatura materijala g/m²",gramatura,setGramatura],["Cena materijala EUR/kg",cenaKg,setCenaKg],["Nalog x1000m",nalog,setNalog],["Škart %",sk,setSk],["Marža %",mar,setMar]].map(function(x){
+                    return <div key={x[0]}><label style={lbl}>{x[0]}</label><input type="number" style={inp} value={x[1]} onChange={function(e){x[2](e.target.value);}}/></div>;
+                  })}
+                </div>
+              </div>
+              {res&&(
+                <div style={Object.assign({},card,{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",border:"1px solid #c4b5fd"})}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:2,fontWeight:700}}>CENA SA MARŽOM / 1000m²</div>
+                  <div style={{fontSize:26,fontWeight:900,color:"#7c3aed"}}>{eu(res.k_1000m2)}</div>
+                  <div style={{fontSize:11,color:"#64748b",marginTop:2}}>Osnovna: {eu(res.osn_1000m2)} | Nalog: {eu(res.kn)}</div>
+                  <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={sacuvaj}>💾 Sacuvaj</button>
+                    <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setKtab("pon");if(kupac)setPkupac(kupac);}}>📄 Ponuda</button>
+                    <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setKtab("rez");}}>📊 Rezultati</button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-          <div style={Object.assign({},card,{marginBottom:14})}>
-            <label style={lbl}>Napomena</label>
-            <textarea style={Object.assign({},inp,{height:65,resize:"vertical"})} value={nap} onChange={function(e){setNap(e.target.value);}}/>
-          </div>
-          <div style={{display:"flex",gap:10}}>
-            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={sacuvaj}>💾 Sacuvaj u bazu</button>
-            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={kreirajPonuduSpulna}>📄 Kreiraj ponudu</button>
           </div>
         </div>
+      )}
 
-        {/* Desna kolona - skica + rezultati */}
+      {ktab==="param"&&(
+        <div style={card}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>⚙️ Parametri troškova</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            {[["Transport EUR/kg",pTr,setPTr,0.01],["Pakovanje EUR fiksno",pPak,setPPak,0.01]].map(function(x){
+              return <div key={x[0]}><label style={lbl}>{x[0]}</label><input type="number" style={inp} value={x[1]} step={x[3]} onChange={function(e){x[2](e.target.value);}}/></div>;
+            })}
+          </div>
+        </div>
+      )}
+
+      {ktab==="pon"&&(
         <div>
           <div style={Object.assign({},card,{marginBottom:14})}>
-            <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>📐 Skica špulne</div>
-            <img src={SPULNA_B64} alt="Skica spulne" style={{width:"100%",borderRadius:8,border:"1px solid #e2e8f0"}}/>
-            <div style={{marginTop:10,display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,fontSize:11}}>
-              {[["W",W,"mm"],["da",da,"mm"],["di",di,"mm"],["D",D,"mm"],["T",T,"mm"],["C",C,"mm"],["G",G,"mm"],["Max",maxMetara,"m"]].map(function(x){
+            <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📄 Podaci za ponudu</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div><label style={lbl}>Kupac *</label><input style={inp} value={pkupac} onChange={function(e){setPkupac(e.target.value);}}/></div>
+              <div><label style={lbl}>Adresa</label><input style={inp} value={padr} onChange={function(e){setPadr(e.target.value);}}/></div>
+              <div><label style={lbl}>Kontakt</label><input style={inp} value={pkon} onChange={function(e){setPkon(e.target.value);}}/></div>
+              <div><label style={lbl}>Jezik</label>
+                <select style={inp} value={pjez} onChange={function(e){setPjez(e.target.value);}}>
+                  <option value="sr">🇷🇸 Srpski</option><option value="en">🇬🇧 English</option><option value="de">🇩🇪 Deutsch</option>
+                </select>
+              </div>
+            </div>
+            <div><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={pnap} onChange={function(e){setPnap(e.target.value);}}/></div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={kreirajPonudu}>📄 Kreiraj ponudu</button>
+            {aktivna&&<div style={{padding:"10px 14px",borderRadius:8,background:"#f0fdf4",border:"1px solid #bbf7d0",color:"#166534",fontSize:12,fontWeight:700}}>✅ Ponuda {aktivna.broj} kreirana</div>}
+          </div>
+        </div>
+      )}
+
+      {ktab==="rez"&&(
+        !res?<div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>Unesite podatke u Unos tab.</div>:(
+          <div style={{display:"grid",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              {[["Osn. cena / 1000m²",res.osn_1000m2,"#64748b"],["Osn. cena / kg",res.osn_kg,"#64748b"],["Osnovna cena naloga",res.osn,"#64748b"],["Cena sa maržom / 1000m²",res.k_1000m2,"#7c3aed"],["Cena sa maržom / kg",res.kkg,"#7c3aed"],["Cena sa maržom nalog",res.kn,"#059669"]].map(function(x){
                 return(
-                  <div key={x[0]} style={{background:"#f1f5f9",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
-                    <div style={{fontWeight:800,fontSize:13,color:"#1d4ed8"}}>{x[0]}</div>
-                    <div style={{fontWeight:600}}>{x[1]||"—"} {x[1]?x[2]:""}</div>
+                  <div key={x[0]} style={Object.assign({},card,{background:x[2]==="#059669"?"#f0fdf4":x[2]==="#7c3aed"?"#f5f3ff":"#f8fafc",border:"1.5px solid "+x[2]+"30"})}>
+                    <div style={{fontSize:9,color:"#64748b",fontWeight:700,textTransform:"uppercase",marginBottom:3}}>{x[0]}</div>
+                    <div style={{fontSize:18,fontWeight:900,color:x[2]}}>{eu(x[1])}</div>
                   </div>
                 );
               })}
             </div>
-          </div>
-          {res&&(
             <div style={card}>
-              <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📊 Rezultati kalkulacije</div>
-              <div style={{display:"grid",gap:8}}>
-                {[
-                  ["Metar po špulni",res.mPerSpulna+" m","#64748b"],
-                  ["m² po špulni",f2(res.m2PerSpulna)+" m²","#64748b"],
-                  ["Cena / m²",eu(res.cenaM2),"#64748b"],
-                  ["Osn. cena / 1000m²",eu(res.osn1000m2),"#64748b"],
-                  ["Cena sa maržom / 1000m²",eu(res.cena1000m2),"#1d4ed8"],
-                ].map(function(x){
+              <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>📦 Potrebe za nalog ({nalog}×1000m)</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
+                {[["Broj špulni",res.brSpulni+" kom","#7c3aed"],["Ukupno m²",Math.round(res.ukM2).toLocaleString()+" m²","#1d4ed8"],["Ukupno kg mat.",res.ukKg.toFixed(1)+" kg","#059669"],["m² po špulni",res.m2PerSpulna.toFixed(1)+" m²","#64748b"],["kg po špulni",res.kgPerSpulna.toFixed(2)+" kg","#64748b"]].map(function(x){
                   return(
-                    <div key={x[0]} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
-                      <span style={{fontSize:12,color:"#64748b"}}>{x[0]}</span>
-                      <span style={{fontSize:14,fontWeight:800,color:x[2]}}>{x[1]}</span>
+                    <div key={x[0]} style={{background:x[2]+"10",border:"1px solid "+x[2]+"30",borderRadius:8,padding:"10px 12px"}}>
+                      <div style={{fontSize:9,color:"#64748b",fontWeight:700,textTransform:"uppercase",marginBottom:3}}>{x[0]}</div>
+                      <div style={{fontSize:16,fontWeight:800,color:x[2]}}>{x[1]}</div>
                     </div>
                   );
                 })}
               </div>
             </div>
-          )}
-        </div>
-      </div>
+            <div style={card}>
+              <div style={{fontSize:13,fontWeight:700,marginBottom:10}}>📊 Struktura troškova</div>
+              {[["Materijal",res.ukMat],["Transport",res.ukTr],["Pakovanje",res.ukPk]].map(function(x){
+                var pct=res.osn>0?x[1]/res.osn*100:0;
+                return(
+                  <div key={x[0]} style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
+                    <div style={{width:120,fontSize:12,color:"#64748b"}}>{x[0]}</div>
+                    <div style={{flex:1,height:6,background:"#f1f5f9",borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",background:"#7c3aed",borderRadius:3,width:Math.max(pct,0.3)+"%"}}/>
+                    </div>
+                    <div style={{width:80,textAlign:"right",fontSize:12,fontWeight:600}}>{(+x[1]).toFixed(4).replace(".",",")} €</div>
+                    <div style={{width:30,textAlign:"right",fontSize:10,color:"#94a3b8"}}>{pct.toFixed(0)}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )
+      )}
     </div>
   );
 }
 
-// ===================== KALKULATOR KESE =====================
-function KalkulatorKese({user,msg,setPage,inp,card,lbl}) {
+
   const [kese,setKese]=useState([]);
   const [izabranaKesa,setIzabranaKesa]=useState(null);
   const [tab,setTab]=useState("lista");
@@ -992,6 +1186,629 @@ function KalkulatorKese({user,msg,setPage,inp,card,lbl}) {
   );
 }
 
+// ===================== KALKULATOR KESE =====================
+function KalkulatorKese({user,msg,setPage,inp,card,lbl}) {
+  const [kese,setKese]=useState([]);
+  const [izabranaKesa,setIzabranaKesa]=useState(null);
+  const [tab,setTab]=useState("lista");
+  const [naziv,setNaziv]=useState("");
+  const [kupac,setKupac]=useState("");
+  const [materijal,setMaterijal]=useState("");
+  const [sirina,setSirina]=useState("");
+  const [duzina,setDuzina]=useState("");
+  const [klapna,setKlapna]=useState("");
+  const [duplofan,setDuplofan]=useState("Obična");
+  const [eurozumba,setEurozumba]=useState("NE");
+  const [okrZumba,setOkrZumba]=useState("NE");
+  const [varDno,setVarDno]=useState("NE");
+  const [falta,setFalta]=useState("NE");
+  const [stampa,setStampa]=useState("Bez štampe");
+  const [pakZaHranu,setPakZaHranu]=useState("NE");
+  const [tolerancija,setTolercancija]=useState("");
+  const [pakovanje,setPakovanje]=useState("");
+  const [napKese,setNapKese]=useState("");
+  const [takta,setTakta]=useState(100);
+  const [ban,setBan]=useState(1);
+  const [kol,setKol]=useState(1000);
+  const [mar,setMar]=useState(40);
+  const [cenaKg,setCenaKg]=useState("");
+  const [sk,setSk]=useState(10);
+  const [res,setRes]=useState(null);
+  const [aktivna,setAktivna]=useState(null);
+  const [pkupac,setPkupac]=useState("");
+  const [padr,setPadr]=useState("");
+  const [pkon,setPkon]=useState("");
+  const [pnap,setPnap]=useState("");
+  const [pjez,setPjez]=useState("sr");
+
+  useEffect(function(){
+    supabase.from('kese').select('*').order('created_at',{ascending:false}).then(function(r){setKese(r.data||[]);});
+  },[]);
+
+  useEffect(function(){
+    if(!izabranaKesa||!kol||!cenaKg){setRes(null);return;}
+    var k=izabranaKesa;
+    var sir=(+k.sirina)/1000;
+    var duz=((+k.duzina)+(+k.klapna||0))*2/1000;
+    var povKese=sir*duz;
+    var gramatura=30;
+    var kgKesa=povKese*gramatura/1000;
+    var cenaKesa=kgKesa*(+cenaKg);
+    var mf=1+(+mar/100);
+    var sas=cenaKesa*(1+(+sk/100));
+    var cenaKesaMar=sas*mf;
+    var ukOsn=sas*(+kol);
+    var ukMar=cenaKesaMar*(+kol);
+    var vremeIzrade=((+kol)/(+takta||100)/(+ban||1))/60;
+    setRes({povKese,kgKesa,cenaKesa,cenaKesaMar,ukOsn,ukMar,ukKg:kgKesa*(+kol),vremeIzrade});
+  },[izabranaKesa,kol,cenaKg,mar,sk,takta,ban]);
+
+  const f2l=function(v){return (!v||isNaN(v))?"—":(+v).toFixed(2).replace(".",",");};
+  const eu=function(v){return f2l(v)+" €";};
+
+  async function sacuvajKesu(){
+    if(!naziv.trim()){msg("Unesite naziv kese!","err");return;}
+    var p={naziv,kupac,materijal,sirina:+sirina,duzina:+duzina,klapna:+klapna,duplofan,eurozumba,okrugla_zumba:okrZumba,var_dno:varDno,falta,stampa,pakovanje_za_hranu:pakZaHranu,tolerancija,pakovanje,napomena:napKese,takta:+takta,ban:+ban,datum:new Date().toLocaleDateString("sr-RS"),ko:user.ime};
+    try{const {data,error}=await supabase.from('kese').insert([p]).select();if(error)throw error;setKese(function(k){return [data[0]].concat(k);});msg("Kesa sacuvana!");setTab("lista");}
+    catch(e){msg("Greška: "+e.message,"err");}
+  }
+
+  async function kreirajPonudu(){
+    if(!izabranaKesa){msg("Izaberite kesu!","err");return;}
+    if(!pkupac.trim()){msg("Unesite kupca!","err");return;}
+    if(!res){msg("Najpre izvrši kalkulaciju!","err");return;}
+    var p={broj:"MP-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9000)+1000),datum:new Date().toLocaleDateString("sr-RS"),vaz:new Date(Date.now()+30*24*3600000).toLocaleDateString("sr-RS"),kupac:pkupac,adr:padr,kon:pkon,naziv:izabranaKesa.naziv,kol:+kol,c1:res.cenaKesaMar,uk:res.ukMar,mats:[],nap:pnap,jez:pjez,status:"Aktivna",ko:user.ime,res:Object.assign({},res),tip:"kesa",kesaData:Object.assign({},izabranaKesa)};
+    try{const {data,error}=await supabase.from('ponude').insert([p]).select();if(error)throw error;setAktivna(data[0]);msg("Ponuda kreirana!");}
+    catch(e){msg("Greška: "+e.message,"err");}
+  }
+
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+        <h2 style={{margin:0,fontSize:20,fontWeight:800}}>🛍️ Kalkulator kese</h2>
+        <div style={{display:"flex",gap:6}}>
+          {[["lista","📋 Lista kesa"],["nova","➕ Nova kesa"],["kalk","🧮 Kalkulacija"],["pon","📄 Ponuda"]].map(function(t){
+            return <button key={t[0]} onClick={function(){setTab(t[0]);}} style={{padding:"7px 14px",borderRadius:7,border:tab===t[0]?"none":"1px solid #e2e8f0",cursor:"pointer",fontSize:12,fontWeight:700,background:tab===t[0]?"#059669":"#fff",color:tab===t[0]?"#fff":"#64748b"}}>{t[1]}</button>;
+          })}
+        </div>
+      </div>
+
+      {tab==="lista"&&(
+        <div>
+          {kese.length===0?(
+            <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
+              <div style={{fontSize:36,marginBottom:10}}>🛍️</div>
+              <div style={{marginBottom:12}}>Nema kesa u bazi. Dodajte prvu kesu.</div>
+              <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,cursor:"pointer"}} onClick={function(){setTab("nova");}}>+ Dodaj kesu</button>
+            </div>
+          ):(
+            <div style={card}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <div style={{fontSize:14,fontWeight:700}}>Baza kesa ({kese.length})</div>
+                <button style={{padding:"7px 16px",borderRadius:7,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setTab("nova");}}>+ Nova kesa</button>
+              </div>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead><tr style={{borderBottom:"2px solid #e2e8f0"}}>
+                  {["Naziv","Kupac","Materijal","Širina","Dužina","Klapna","Štampa",""].map(function(h){return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;})}
+                </tr></thead>
+                <tbody>
+                  {kese.map(function(k){
+                    return(
+                      <tr key={k.id} style={{borderBottom:"1px solid #f1f5f9",background:izabranaKesa&&izabranaKesa.id===k.id?"#f0fdf4":"transparent"}}>
+                        <td style={{padding:"9px 8px",fontWeight:700}}>{k.naziv}</td>
+                        <td style={{padding:"9px 8px",color:"#64748b"}}>{k.kupac||"—"}</td>
+                        <td style={{padding:"9px 8px"}}>{k.materijal||"—"}</td>
+                        <td style={{padding:"9px 8px"}}>{k.sirina} mm</td>
+                        <td style={{padding:"9px 8px"}}>{k.duzina} mm</td>
+                        <td style={{padding:"9px 8px"}}>{k.klapna||0} mm</td>
+                        <td style={{padding:"9px 8px",fontSize:11}}>{k.stampa||"—"}</td>
+                        <td style={{padding:"9px 8px"}}>
+                          <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#059669",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setIzabranaKesa(k);if(k.kupac)setPkupac(k.kupac);setMaterijal(k.materijal||"");setCenaKg("");setTab("kalk");}}>Kalkuliši</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab==="nova"&&(
+        <div style={card}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:16}}>➕ Nova kesa</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+            <div><label style={lbl}>Naziv kese *</label><input style={inp} value={naziv} onChange={function(e){setNaziv(e.target.value);}} placeholder="npr. Kesa sa klapnom 94x214+32"/></div>
+            <div><label style={lbl}>Kupac</label><input style={inp} value={kupac} onChange={function(e){setKupac(e.target.value);}}/></div>
+            <div><label style={lbl}>Materijal</label><input style={inp} value={materijal} onChange={function(e){setMaterijal(e.target.value);}} placeholder="npr. OPP30"/></div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              <div><label style={lbl}>Širina mm</label><input type="number" style={inp} value={sirina} onChange={function(e){setSirina(e.target.value);}}/></div>
+              <div><label style={lbl}>Dužina mm</label><input type="number" style={inp} value={duzina} onChange={function(e){setDuzina(e.target.value);}}/></div>
+              <div><label style={lbl}>Klapna mm</label><input type="number" style={inp} value={klapna} onChange={function(e){setKlapna(e.target.value);}}/></div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
+            {[["Duplofan traka",duplofan,setDuplofan,["Obična","Nema","Specijalna"]],["Eurozumba",eurozumba,setEurozumba,["NE","DA - mala","DA - srednja","DA - velika"]],["Okrugla zumba",okrZumba,setOkrZumba,["NE","DA"]],["Var na dnu",varDno,setVarDno,["NE","DA"]],["Falta na dnu",falta,setFalta,["NE","DA"]],["Pakovanje za hranu",pakZaHranu,setPakZaHranu,["NE","DA"]]].map(function(x){
+              return <div key={x[0]}><label style={lbl}>{x[0]}</label><select style={inp} value={x[1]} onChange={function(e){x[2](e.target.value);}}>{x[3].map(function(o){return <option key={o} value={o}>{o}</option>;})}</select></div>;
+            })}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
+            <div><label style={lbl}>Štampa</label><input style={inp} value={stampa} onChange={function(e){setStampa(e.target.value);}} placeholder="Bez štampe / Štampa vrućim pečatom..."/></div>
+            <div><label style={lbl}>Tolerancija</label><input style={inp} value={tolerancija} onChange={function(e){setTolercancija(e.target.value);}} placeholder="±2mm"/></div>
+            <div><label style={lbl}>Pakovanje</label><input style={inp} value={pakovanje} onChange={function(e){setPakovanje(e.target.value);}} placeholder="U bunt 200 kom"/></div>
+            <div><label style={lbl}>Takta / min</label><input type="number" style={inp} value={takta} onChange={function(e){setTakta(e.target.value);}}/></div>
+            <div><label style={lbl}>Ban</label><input type="number" style={inp} value={ban} onChange={function(e){setBan(e.target.value);}}/></div>
+          </div>
+          <div style={{marginBottom:16}}><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={napKese} onChange={function(e){setNapKese(e.target.value);}}/></div>
+          <div style={{display:"flex",gap:10}}>
+            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={sacuvajKesu}>💾 Sacuvaj kesu</button>
+            <button style={{padding:"10px 20px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setTab("lista");}}>Otkaži</button>
+          </div>
+        </div>
+      )}
+
+      {tab==="kalk"&&(
+        <div>
+          {!izabranaKesa?(
+            <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
+              <div style={{fontSize:36,marginBottom:10}}>🛍️</div>
+              <div style={{marginBottom:12}}>Izaberite kesu iz liste.</div>
+              <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,cursor:"pointer"}} onClick={function(){setTab("lista");}}>← Lista kesa</button>
+            </div>
+          ):(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              <div>
+                <div style={Object.assign({},card,{marginBottom:14,background:"#f0fdf4",border:"1.5px solid #bbf7d0"})}>
+                  <div style={{fontSize:14,fontWeight:700,marginBottom:10,color:"#059669"}}>🛍️ {izabranaKesa.naziv}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12}}>
+                    {[["Materijal",izabranaKesa.materijal],["Širina",izabranaKesa.sirina+" mm"],["Dužina",izabranaKesa.duzina+" mm"],["Klapna",(izabranaKesa.klapna||0)+" mm"],["Eurozumba",izabranaKesa.eurozumba],["Štampa",izabranaKesa.stampa],["Var dno",izabranaKesa.var_dno],["Takta/min",izabranaKesa.takta||"—"],["Ban",izabranaKesa.ban||"1"]].map(function(x){
+                      return <div key={x[0]} style={{padding:"5px 8px",background:"#fff",borderRadius:6,border:"1px solid #bbf7d0"}}><span style={{color:"#64748b"}}>{x[0]}: </span><span style={{fontWeight:600}}>{x[1]||"—"}</span></div>;
+                    })}
+                  </div>
+                  <button style={{fontSize:11,color:"#059669",background:"transparent",border:"none",cursor:"pointer",padding:0,marginTop:8}} onClick={function(){setTab("lista");}}>← Promeni kesu</button>
+                </div>
+                <div style={card}>
+                  <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>💰 Parametri kalkulacije</div>
+                  <div style={{display:"grid",gap:10}}>
+                    <div><label style={lbl}>Količina (kom)</label><input type="number" style={inp} value={kol} onChange={function(e){setKol(e.target.value);}}/></div>
+                    <div><label style={lbl}>Cena materijala EUR/kg</label><input type="number" style={inp} value={cenaKg} step={0.1} onChange={function(e){setCenaKg(e.target.value);}}/></div>
+                    <div><label style={lbl}>Škart %</label><input type="number" style={inp} value={sk} onChange={function(e){setSk(e.target.value);}}/></div>
+                    <div><label style={lbl}>Marža %</label><input type="number" style={inp} value={mar} step={1} onChange={function(e){setMar(e.target.value);}}/></div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                {res?(
+                  <div style={card}>
+                    <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📊 Rezultati</div>
+                    <div style={{display:"grid",gap:8}}>
+                      {[["Površina kese",f2l(res.povKese*10000)+" cm²","#64748b"],["Težina kese",f2l(res.kgKesa*1000)+" g","#64748b"],["Osn. cena / kesa",eu(res.cenaKesa),"#64748b"],["Cena sa maržom / kesa",eu(res.cenaKesaMar),"#059669"],["Ukupno kg materijala",f2l(res.ukKg)+" kg","#64748b"],["Vreme izrade h",f2l(res.vremeIzrade)+" h","#f59e0b"],["Osnovna cena naloga",eu(res.ukOsn),"#64748b"],["Cena sa maržom nalog",eu(res.ukMar),"#059669"]].map(function(x){
+                        return(
+                          <div key={x[0]} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:x[2]==="#059669"?"#f0fdf4":"#f8fafc",borderRadius:8,border:"1px solid "+(x[2]==="#059669"?"#bbf7d0":"#e2e8f0")}}>
+                            <span style={{fontSize:12,color:"#64748b"}}>{x[0]}</span>
+                            <span style={{fontSize:14,fontWeight:800,color:x[2]}}>{x[1]}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{marginTop:14,display:"flex",gap:10}}>
+                      <button style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setPkupac(izabranaKesa.kupac||"");setTab("pon");}}>📄 Kreiraj ponudu</button>
+                    </div>
+                  </div>
+                ):(
+                  <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
+                    Unesite parametre kalkulacije.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab==="pon"&&(
+        <div>
+          <div style={Object.assign({},card,{marginBottom:14})}>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📄 Podaci za ponudu</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div><label style={lbl}>Kupac *</label><input style={inp} value={pkupac} onChange={function(e){setPkupac(e.target.value);}}/></div>
+              <div><label style={lbl}>Adresa</label><input style={inp} value={padr} onChange={function(e){setPadr(e.target.value);}}/></div>
+              <div><label style={lbl}>Kontakt</label><input style={inp} value={pkon} onChange={function(e){setPkon(e.target.value);}}/></div>
+              <div><label style={lbl}>Jezik</label>
+                <select style={inp} value={pjez} onChange={function(e){setPjez(e.target.value);}}>
+                  <option value="sr">🇷🇸 Srpski</option><option value="en">🇬🇧 English</option><option value="de">🇩🇪 Deutsch</option>
+                </select>
+              </div>
+            </div>
+            <div><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={pnap} onChange={function(e){setPnap(e.target.value);}}/></div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={kreirajPonudu}>📄 Kreiraj ponudu</button>
+            {aktivna&&<div style={{padding:"10px 14px",borderRadius:8,background:"#f0fdf4",border:"1px solid #bbf7d0",color:"#166534",fontSize:12,fontWeight:700}}>✅ Ponuda {aktivna.broj} kreirana</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===================== PONUDE PAGE =====================
+function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,pdfLoading,pregPonudaRef,downloadPDF,kreirajNalogeIzPonude,odbijPonudu,setPage,TIP_BOJA,TIP_LAB}) {
+  var [filterKupac,setFilterKupac]=useState("");
+  var [filterStatus,setFilterStatus]=useState("");
+  var [filterTip,setFilterTip]=useState("");
+  var [pretraga,setPretraga]=useState("");
+  var [editPonuda,setEditPonuda]=useState(null);
+  var [brisanje,setBrisanje]=useState(null);
+
+  var kupci=[...new Set(db.ponude.map(function(p){return p.kupac;}).filter(Boolean))].sort();
+  var statusi=["Aktivna","Odobrena","Odbijena"];
+  var tipovi=["folija","kesa","spulna"];
+
+  var filtrirane=db.ponude.filter(function(p){
+    return (!filterKupac||p.kupac===filterKupac)&&
+           (!filterStatus||p.status===filterStatus)&&
+           (!filterTip||p.tip===filterTip)&&
+           (!pretraga||(p.naziv||"").toLowerCase().includes(pretraga.toLowerCase())||(p.broj||"").toLowerCase().includes(pretraga.toLowerCase()));
+  });
+
+  // Grupisanje po kupcu
+  var poKupcu={};
+  filtrirane.forEach(function(p){
+    var k=p.kupac||"—";
+    if(!poKupcu[k])poKupcu[k]=[];
+    poKupcu[k].push(p);
+  });
+
+  async function obrisiPonudu(id){
+    try{
+      var {error}=await supabase.from('ponude').delete().eq('id',id);
+      if(error)throw error;
+      setDb(function(d){return Object.assign({},d,{ponude:d.ponude.filter(function(p){return p.id!==id;})});});
+      setBrisanje(null);
+      setPregPonuda(null);
+      msg("Ponuda obrisana!");
+    }catch(e){msg("Greška: "+e.message,"err");}
+  }
+
+  async function sacuvajIzmene(p){
+    try{
+      var {error}=await supabase.from('ponude').update({kupac:p.kupac,naziv:p.naziv,kol:p.kol,c1:p.c1,uk:p.uk,nap:p.nap,status:p.status,vaz:p.vaz}).eq('id',p.id);
+      if(error)throw error;
+      setDb(function(d){return Object.assign({},d,{ponude:d.ponude.map(function(x){return x.id===p.id?Object.assign({},x,p):x;})});});
+      setEditPonuda(null);
+      msg("Ponuda ažurirana!");
+    }catch(e){msg("Greška: "+e.message,"err");}
+  }
+
+  var stBg=function(s){return s==="Aktivna"?"#fef9c3":s==="Odobrena"?"#dcfce7":"#fee2e2";};
+  var stCl=function(s){return s==="Aktivna"?"#854d0e":s==="Odobrena"?"#166534":"#991b1b";};
+
+  // MODAL ZA BRISANJE
+  if(brisanje){
+    return(
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"#fff",borderRadius:16,padding:32,width:380,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+          <div style={{fontSize:36,marginBottom:12}}>🗑️</div>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:8}}>Obriši ponudu?</div>
+          <div style={{fontSize:13,color:"#64748b",marginBottom:20}}>Ponuda <b>{brisanje.broj}</b> za <b>{brisanje.kupac}</b> će biti trajno obrisana.</div>
+          <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+            <button style={{padding:"10px 24px",borderRadius:8,border:"none",background:"#ef4444",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){obrisiPonudu(brisanje.id);}}>Da, obriši</button>
+            <button style={{padding:"10px 24px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setBrisanje(null);}}>Otkaži</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // MODAL ZA IZMENU
+  if(editPonuda){
+    var ep=editPonuda;
+    return(
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{background:"#fff",borderRadius:16,padding:28,width:520,boxShadow:"0 20px 60px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"}}>
+          <div style={{fontSize:16,fontWeight:800,marginBottom:18,color:"#1d4ed8"}}>✏️ Izmena ponude {ep.broj}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+            <div><label style={lbl}>Kupac</label><input style={inp} value={ep.kupac||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{kupac:e.target.value});});}/></div>
+            <div><label style={lbl}>Naziv</label><input style={inp} value={ep.naziv||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{naziv:e.target.value});});}}/></div>
+            <div><label style={lbl}>Količina</label><input type="number" style={inp} value={ep.kol||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{kol:+e.target.value});});}}/></div>
+            <div><label style={lbl}>Cena/jed.</label><input type="number" step="0.01" style={inp} value={ep.c1||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{c1:+e.target.value,uk:(+e.target.value)*(+p.kol||1)});});}}/></div>
+            <div><label style={lbl}>Ukupno €</label><input type="number" step="0.01" style={inp} value={ep.uk||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{uk:+e.target.value});});}}/></div>
+            <div><label style={lbl}>Važi do</label><input style={inp} value={ep.vaz||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{vaz:e.target.value});});}}/></div>
+            <div><label style={lbl}>Status</label>
+              <select style={inp} value={ep.status||"Aktivna"} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{status:e.target.value});});}}>
+                <option>Aktivna</option><option>Odobrena</option><option>Odbijena</option>
+              </select>
+            </div>
+          </div>
+          <div style={{marginBottom:14}}><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={ep.nap||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{nap:e.target.value});})}}/></div>
+          <div style={{display:"flex",gap:10}}>
+            <button style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){sacuvajIzmene(ep);}}>💾 Sacuvaj izmene</button>
+            <button style={{padding:"10px 18px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setEditPonuda(null);}}>Otkaži</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // PREGLED JEDNE PONUDE
+  if(pregPonuda){
+    return(
+      <div>
+        <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+          <button onClick={function(){setPregPonuda(null);}} style={{padding:"8px 16px",borderRadius:8,border:"1.5px solid #1d4ed8",background:"transparent",color:"#1d4ed8",cursor:"pointer",fontWeight:700,fontSize:13}}>← Nazad</button>
+          <button style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setEditPonuda(Object.assign({},pregPonuda));}}>✏️ Izmeni</button>
+          <button style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#dc2626",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:pdfLoading?0.7:1}} onClick={function(){downloadPDF(pregPonudaRef,"Ponuda-"+(pregPonuda.broj||""));}}>
+            {pdfLoading?"⏳ Generišem...":"⬇️ Preuzmi PDF"}
+          </button>
+          <button style={{padding:"8px 18px",borderRadius:8,border:"1px solid #fca5a5",background:"#fef2f2",color:"#ef4444",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setBrisanje(pregPonuda);}}>🗑️ Obriši</button>
+        </div>
+        <div style={card}>
+          <PonudaView printRef={pregPonudaRef} t={PREVODI[pregPonuda.jez||"sr"]} naziv={pregPonuda.naziv} kupac={pregPonuda.kupac} adr={pregPonuda.adr} kon={pregPonuda.kon} kol={pregPonuda.kol} c1={pregPonuda.c1} uk={pregPonuda.uk} nap={pregPonuda.nap} mats={pregPonuda.mats} broj={pregPonuda.broj} dat={pregPonuda.datum} vaz={pregPonuda.vaz} tip={pregPonuda.tip}/>
+          {pregPonuda.status==="Aktivna"&&(
+            <div style={{marginTop:18,paddingTop:18,borderTop:"1px solid #e2e8f0",display:"flex",gap:10}}>
+              <button style={{padding:"10px 18px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){kreirajNalogeIzPonude(pregPonuda);}}>🔧 Odobri i kreiraj naloge</button>
+              <button style={{padding:"10px 18px",borderRadius:8,border:"none",background:"#ef4444",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){odbijPonudu(pregPonuda.id);setPregPonuda(null);}}>✕ Odbij</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // LISTA PONUDA
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <h2 style={{margin:0,fontSize:20,fontWeight:800}}>📄 Ponude</h2>
+        <div style={{display:"flex",gap:8}}>
+          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>🧮 Folija</button>
+          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_kesa");}}>🛍️ Kesa</button>
+          <button style={{padding:"8px 14px",borderRadius:7,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_spulna");}}>🔄 Špulna</button>
+        </div>
+      </div>
+
+      {/* FILTERI */}
+      <div style={Object.assign({},card,{marginBottom:14,padding:"14px 16px"})}>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <input style={Object.assign({},inp,{flex:1,minWidth:160})} placeholder="🔍 Pretraži po broju ili nazivu..." value={pretraga} onChange={function(e){setPretraga(e.target.value);}}/>
+          <select style={Object.assign({},inp,{width:170})} value={filterKupac} onChange={function(e){setFilterKupac(e.target.value);}}>
+            <option value="">👤 Svi kupci</option>
+            {kupci.map(function(k){return <option key={k} value={k}>{k}</option>;})}
+          </select>
+          <select style={Object.assign({},inp,{width:140})} value={filterStatus} onChange={function(e){setFilterStatus(e.target.value);}}>
+            <option value="">📊 Svi statusi</option>
+            {statusi.map(function(s){return <option key={s} value={s}>{s}</option>;})}
+          </select>
+          <select style={Object.assign({},inp,{width:130})} value={filterTip} onChange={function(e){setFilterTip(e.target.value);}}>
+            <option value="">🏷️ Svi tipovi</option>
+            {tipovi.map(function(t){return <option key={t} value={t}>{TIP_LAB[t]||t}</option>;})}
+          </select>
+          {(filterKupac||filterStatus||filterTip||pretraga)&&(
+            <button style={{padding:"8px 12px",borderRadius:7,border:"1px solid #e2e8f0",background:"#f8fafc",color:"#64748b",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setFilterKupac("");setFilterStatus("");setFilterTip("");setPretraga("");}}>✕ Reset</button>
+          )}
+          <div style={{marginLeft:"auto",fontSize:12,color:"#64748b",fontWeight:600}}>{filtrirane.length} ponuda</div>
+        </div>
+      </div>
+
+      {db.ponude.length===0?(
+        <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
+          <div style={{fontSize:36,marginBottom:10}}>📄</div>
+          <div style={{marginBottom:12}}>Nema ponuda. Kreirajte kroz kalkulator.</div>
+          <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+            <button style={{padding:"9px 18px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>🧮 Nova folija</button>
+            <button style={{padding:"9px 18px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_kesa");}}>🛍️ Nova kesa</button>
+            <button style={{padding:"9px 18px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setPage("kalk_spulna");}}>🔄 Nova špulna</button>
+          </div>
+        </div>
+      ):filtrirane.length===0?(
+        <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
+          <div style={{fontSize:28,marginBottom:8}}>🔍</div>
+          <div>Nema rezultata za izabrane filtere.</div>
+        </div>
+      ):(
+        Object.keys(poKupcu).sort().map(function(kupac){
+          var ponudeKupca=poKupcu[kupac];
+          var ukupnoKupac=ponudeKupca.reduce(function(s,p){return s+(+p.uk||0);},0);
+          return(
+            <div key={kupac} style={{marginBottom:16}}>
+              {/* Kupac header */}
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",background:"#0f172a",borderRadius:"10px 10px 0 0",color:"#fff"}}>
+                <span style={{fontSize:16}}>👤</span>
+                <span style={{fontWeight:800,fontSize:14}}>{kupac}</span>
+                <span style={{fontSize:12,color:"#94a3b8",marginLeft:4}}>{ponudeKupca.length} ponuda</span>
+                <span style={{marginLeft:"auto",fontWeight:700,fontSize:13,color:"#93c5fd"}}>{ukupnoKupac.toFixed(2).replace(".",",")} €</span>
+              </div>
+              {/* Tabela ponuda kupca */}
+              <div style={{background:"#fff",borderRadius:"0 0 10px 10px",border:"1px solid #e2e8f0",borderTop:"none",overflow:"hidden"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                  <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+                    {["Broj","Naziv","Tip","Kol.","Ukupno","Status","Datum","Važi do",""].map(function(h){return <th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#64748b",fontWeight:600,fontSize:11}}>{h}</th>;})}
+                  </tr></thead>
+                  <tbody>
+                    {ponudeKupca.map(function(p){
+                      return(
+                        <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9",cursor:"pointer"}} onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                          <td style={{padding:"9px 10px",fontWeight:700,color:"#1d4ed8",whiteSpace:"nowrap"}}>{p.broj}</td>
+                          <td style={{padding:"9px 10px",fontWeight:600,fontSize:12}}>{p.naziv}</td>
+                          <td style={{padding:"9px 10px"}}><span style={{background:(TIP_BOJA[p.tip]||"#64748b")+"20",color:TIP_BOJA[p.tip]||"#64748b",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:10}}>{TIP_LAB[p.tip]||"—"}</span></td>
+                          <td style={{padding:"9px 10px",color:"#64748b"}}>{(p.kol||0).toLocaleString()}</td>
+                          <td style={{padding:"9px 10px",fontWeight:700,color:"#059669"}}>{eu(p.uk)}</td>
+                          <td style={{padding:"9px 10px"}}><span style={{background:stBg(p.status),color:stCl(p.status),borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:11}}>{p.status}</span></td>
+                          <td style={{padding:"9px 10px",color:"#64748b",fontSize:12,whiteSpace:"nowrap"}}>{p.datum}</td>
+                          <td style={{padding:"9px 10px",color:"#64748b",fontSize:12,whiteSpace:"nowrap"}}>{p.vaz||"—"}</td>
+                          <td style={{padding:"9px 10px"}}>
+                            <div style={{display:"flex",gap:5}}>
+                              <button style={{padding:"4px 10px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPregPonuda(p);}}>👁️</button>
+                              <button style={{padding:"4px 10px",borderRadius:6,border:"none",background:"#f59e0b",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setEditPonuda(Object.assign({},p));}}>✏️</button>
+                              <button style={{padding:"4px 10px",borderRadius:6,border:"none",background:"#ef4444",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setBrisanje(p);}}>🗑️</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+// ===================== BAZA PROIZVODA =====================
+function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) {
+  var [filterKupac,setFilterKupac]=useState("");
+  var [filterTip,setFilterTip]=useState("");
+  var [pretraga,setPretraga]=useState("");
+  var [brisanje,setBrisanje]=useState(null);
+
+  var kupci=[...new Set(db.proizvodi.map(function(p){return p.kupac;}).filter(Boolean))].sort();
+
+  var filtrirani=db.proizvodi.filter(function(p){
+    return (!filterKupac||p.kupac===filterKupac)&&
+           (!filterTip||p.tip===filterTip)&&
+           (!pretraga||(p.naziv||"").toLowerCase().includes(pretraga.toLowerCase())||(p.kupac||"").toLowerCase().includes(pretraga.toLowerCase()));
+  });
+
+  var poKupcu={};
+  filtrirani.forEach(function(p){
+    var k=p.kupac||"Bez kupca";
+    if(!poKupcu[k])poKupcu[k]=[];
+    poKupcu[k].push(p);
+  });
+
+  async function obrisiProizvod(id){
+    try{
+      var {error}=await supabase.from('proizvodi').delete().eq('id',id);
+      if(error)throw error;
+      setDb(function(d){return Object.assign({},d,{proizvodi:d.proizvodi.filter(function(p){return p.id!==id;})});});
+      setBrisanje(null);
+      msg("Proizvod obrisan!");
+    }catch(e){msg("Greška: "+e.message,"err");}
+  }
+
+  const BOJE=["#1d4ed8","#7c3aed","#0891b2","#059669"];
+  const SLOJ=["A","B","C","D"];
+
+  if(brisanje){
+    return(
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"#fff",borderRadius:16,padding:32,width:380,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+          <div style={{fontSize:36,marginBottom:12}}>🗑️</div>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:8}}>Obriši proizvod?</div>
+          <div style={{fontSize:13,color:"#64748b",marginBottom:20}}><b>{brisanje.naziv}</b> će biti trajno obrisan iz baze.</div>
+          <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+            <button style={{padding:"10px 24px",borderRadius:8,border:"none",background:"#ef4444",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){obrisiProizvod(brisanje.id);}}>Da, obriši</button>
+            <button style={{padding:"10px 24px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setBrisanje(null);}}>Otkaži</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+        <h2 style={{margin:0,fontSize:20,fontWeight:800}}>📦 Baza proizvoda</h2>
+        <div style={{fontSize:13,color:"#64748b",fontWeight:600}}>{filtrirani.length} / {db.proizvodi.length} proizvoda</div>
+      </div>
+
+      {/* FILTERI */}
+      <div style={Object.assign({},card,{marginBottom:14,padding:"14px 16px"})}>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          <input style={Object.assign({},inp,{flex:1,minWidth:160})} placeholder="🔍 Pretraži po nazivu ili kupcu..." value={pretraga} onChange={function(e){setPretraga(e.target.value);}}/>
+          <select style={Object.assign({},inp,{width:170})} value={filterKupac} onChange={function(e){setFilterKupac(e.target.value);}}>
+            <option value="">👤 Svi kupci</option>
+            {kupci.map(function(k){return <option key={k} value={k}>{k}</option>;})}
+          </select>
+          <select style={Object.assign({},inp,{width:140})} value={filterTip} onChange={function(e){setFilterTip(e.target.value);}}>
+            <option value="">🏷️ Svi tipovi</option>
+            <option value="folija">Folija</option>
+            <option value="kesa">Kesa</option>
+            <option value="spulna">Špulna</option>
+          </select>
+          {(filterKupac||filterTip||pretraga)&&(
+            <button style={{padding:"8px 12px",borderRadius:7,border:"1px solid #e2e8f0",background:"#f8fafc",color:"#64748b",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setFilterKupac("");setFilterTip("");setPretraga("");}}>✕ Reset</button>
+          )}
+        </div>
+      </div>
+
+      {db.proizvodi.length===0?(
+        <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
+          <div style={{fontSize:36,marginBottom:10}}>📦</div>
+          <div style={{marginBottom:12}}>Baza je prazna. Sačuvajte kalkulaciju da dodate proizvod.</div>
+          <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>+ Nova kalkulacija</button>
+        </div>
+      ):filtrirani.length===0?(
+        <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
+          <div style={{fontSize:28,marginBottom:8}}>🔍</div>
+          <div>Nema rezultata za izabrane filtere.</div>
+        </div>
+      ):(
+        Object.keys(poKupcu).sort().map(function(kupac){
+          var proizvKupca=poKupcu[kupac];
+          return(
+            <div key={kupac} style={{marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 14px",background:"#0f172a",borderRadius:"10px 10px 0 0",color:"#fff"}}>
+                <span style={{fontSize:16}}>👤</span>
+                <span style={{fontWeight:800,fontSize:14}}>{kupac}</span>
+                <span style={{fontSize:12,color:"#94a3b8",marginLeft:4}}>{proizvKupca.length} {proizvKupca.length===1?"proizvod":"proizvoda"}</span>
+              </div>
+              <div style={{background:"#fff",borderRadius:"0 0 10px 10px",border:"1px solid #e2e8f0",borderTop:"none"}}>
+                {proizvKupca.map(function(p,pi){
+                  var mats=(p.mats||[]).filter(function(m){return m.tip;});
+                  return(
+                    <div key={p.id} style={{padding:"14px 16px",borderBottom:pi<proizvKupca.length-1?"1px solid #f1f5f9":"none",display:"flex",gap:14,alignItems:"flex-start"}}>
+                      {/* Tip badge */}
+                      <span style={{background:(TIP_BOJA[p.tip]||"#64748b")+"20",color:TIP_BOJA[p.tip]||"#64748b",borderRadius:6,padding:"3px 10px",fontWeight:700,fontSize:10,flexShrink:0,marginTop:2}}>{TIP_LAB[p.tip]||"—"}</span>
+                      {/* Info */}
+                      <div style={{flex:1}}>
+                        <div style={{fontWeight:800,fontSize:14,marginBottom:4}}>{p.naziv}</div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {mats.map(function(m,i){
+                            return(
+                              <span key={i} style={{fontSize:11,background:BOJE[i]+"15",color:BOJE[i],borderRadius:5,padding:"2px 7px",fontWeight:700}}>
+                                {SLOJ[i]}: {m.tip} {m.deb}µ
+                                {m.kas>0&&" 🔗"+m.kas+"×"}
+                                {m.lak>0&&" ✨"+m.lak+"×"}
+                                {m.stamp&&" 🖨️"}
+                              </span>
+                            );
+                          })}
+                          {p.sir&&<span style={{fontSize:11,color:"#64748b",padding:"2px 7px",background:"#f1f5f9",borderRadius:5}}>📏 {p.sir}mm</span>}
+                          {p.datum&&<span style={{fontSize:11,color:"#94a3b8",padding:"2px 7px"}}>📅 {p.datum}</span>}
+                          {p.ko&&<span style={{fontSize:11,color:"#94a3b8",padding:"2px 7px"}}>👤 {p.ko}</span>}
+                        </div>
+                      </div>
+                      {/* Cena */}
+                      {p.res&&p.res.k1&&(
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>Cena/1000m</div>
+                          <div style={{fontSize:18,fontWeight:800,color:"#1d4ed8"}}>{eu(p.res.k1)}</div>
+                        </div>
+                      )}
+                      {/* Akcije */}
+                      <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
+                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("kalk_folija");}}>📋 Otvori</button>
+                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#059669",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("novi_nalog");}}>⚡ Nalog</button>
+                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#fef2f2",color:"#ef4444",cursor:"pointer",fontSize:11,fontWeight:700,border:"1px solid #fca5a5"}} onClick={function(){setBrisanje(p);}}>🗑️</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 // ===================== GLAVNA APLIKACIJA =====================
 export default function App() {
   const [user,setUser]=useState(null);
@@ -1134,7 +1951,10 @@ export default function App() {
     {k:"kalk_spulna",l:"Kalk. špulne",i:"🔄"},
     {k:"ponude",l:"Ponude",i:"📄"},
     {k:"nalozi",l:"Radni nalozi",i:"🔧"},
+    {k:"pracenje",l:"Praćenje",i:"🔴"},
+    {k:"novi_nalog",l:"Nalog iz baze",i:"⚡"},
     {k:"baza",l:"Baza proizvoda",i:"📦"},
+    {k:"magacin",l:"Magacin",i:"🏭"},
   ];
   if(user.uloga==="admin")nav.push({k:"pod",l:"Podešavanja",i:"⚙️"});
 
@@ -1225,68 +2045,23 @@ export default function App() {
 
         {/* KALKULATORI */}
         {page==="kalk_folija"&&<KalkulatorFolije user={user} db={db} setDb={setDb} setPage={setPage} msg={msg} inp={inp} card={card} lbl={lbl}/>}
-        {page==="kalk_kesa"&&<KalkulatorKese user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
+        {page==="kalk_kesa"&&<KalkulatorKese2 user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
         {page==="kalk_spulna"&&<KalkulatorSpulne user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
+        {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
+        {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl} dnow={dnow}/>}
+        {page==="pracenje"&&<PraćenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} setAktivniNalog={setAktivniNalog} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
 
         {/* PONUDE */}
         {page==="ponude"&&(
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
-              <h2 style={{margin:0,fontSize:20,fontWeight:800}}>📄 Ponude</h2>
-              <button style={{padding:"9px 18px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>+ Nova ponuda</button>
-            </div>
-            {pregPonuda?(
-              <div>
-                <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                  <button onClick={function(){setPregPonuda(null);}} style={{padding:"8px 16px",borderRadius:8,border:"1.5px solid #1d4ed8",background:"transparent",color:"#1d4ed8",cursor:"pointer",fontWeight:700,fontSize:13}}>← Nazad</button>
-                  <button style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#dc2626",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",opacity:pdfLoading?0.7:1}} onClick={function(){downloadPDF(pregPonudaRef,"Ponuda-"+(pregPonuda.broj||""));}}>
-                    {pdfLoading?"⏳ Generišem...":"⬇️ Preuzmi PDF"}
-                  </button>
-                </div>
-                <div style={card}>
-                  <PonudaView printRef={pregPonudaRef} t={PREVODI[pregPonuda.jez||"sr"]} naziv={pregPonuda.naziv} kupac={pregPonuda.kupac} adr={pregPonuda.adr} kon={pregPonuda.kon} kol={pregPonuda.kol} c1={pregPonuda.c1} uk={pregPonuda.uk} nap={pregPonuda.nap} mats={pregPonuda.mats} broj={pregPonuda.broj} dat={pregPonuda.datum} vaz={pregPonuda.vaz} tip={pregPonuda.tip}/>
-                  {pregPonuda.status==="Aktivna"&&(
-                    <div style={{marginTop:18,paddingTop:18,borderTop:"1px solid #e2e8f0",display:"flex",gap:10}}>
-                      <button style={{padding:"10px 18px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){kreirajNalogeIzPonude(pregPonuda);}}>🔧 Odobri i kreiraj naloge</button>
-                      <button style={{padding:"10px 18px",borderRadius:8,border:"none",background:"#ef4444",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){odbijPonudu(pregPonuda.id);setPregPonuda(null);}}>✕ Odbij</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ):db.ponude.length===0?(
-              <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
-                <div style={{fontSize:36,marginBottom:10}}>📄</div>
-                <div>Nema ponuda. Kreirajte kroz kalkulator.</div>
-              </div>
-            ):(
-              <div style={card}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead><tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Broj","Kupac","Naziv","Tip","Količina","Ukupno","Status","Datum",""].map(function(h){return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;})}
-                  </tr></thead>
-                  <tbody>
-                    {db.ponude.map(function(p){
-                      var stBg=p.status==="Aktivna"?"#fef9c3":p.status==="Odobrena"?"#dcfce7":"#fee2e2";
-                      var stCl=p.status==="Aktivna"?"#854d0e":p.status==="Odobrena"?"#166534":"#991b1b";
-                      return(
-                        <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9"}}>
-                          <td style={{padding:"9px 8px",fontWeight:700,color:"#1d4ed8"}}>{p.broj}</td>
-                          <td style={{padding:"9px 8px",fontWeight:600}}>{p.kupac}</td>
-                          <td style={{padding:"9px 8px",color:"#64748b",fontSize:12}}>{p.naziv}</td>
-                          <td style={{padding:"9px 8px"}}><span style={{background:(TIP_BOJA[p.tip]||"#64748b")+"20",color:TIP_BOJA[p.tip]||"#64748b",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:10}}>{TIP_LAB[p.tip]||"—"}</span></td>
-                          <td style={{padding:"9px 8px"}}>{(p.kol||0).toLocaleString()}</td>
-                          <td style={{padding:"9px 8px",fontWeight:700}}>{eu(p.uk)}</td>
-                          <td style={{padding:"9px 8px"}}><span style={{background:stBg,color:stCl,borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:11}}>{p.status}</span></td>
-                          <td style={{padding:"9px 8px",color:"#64748b"}}>{p.datum}</td>
-                          <td style={{padding:"9px 8px"}}><button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPregPonuda(p);}}>Pregled</button></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <PonudePage
+            db={db} setDb={setDb} card={card} inp={inp} lbl={lbl}
+            eu={eu} msg={msg} user={user}
+            pregPonuda={pregPonuda} setPregPonuda={setPregPonuda}
+            pdfLoading={pdfLoading} pregPonudaRef={pregPonudaRef}
+            downloadPDF={downloadPDF} kreirajNalogeIzPonude={kreirajNalogeIzPonude}
+            odbijPonudu={odbijPonudu} setPage={setPage}
+            TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}
+          />
         )}
 
         {/* RADNI NALOZI */}
@@ -1448,42 +2223,11 @@ export default function App() {
 
         {/* BAZA PROIZVODA */}
         {page==="baza"&&(
-          <div>
-            <h2 style={{margin:"0 0 18px",fontSize:20,fontWeight:800}}>📦 Baza proizvoda</h2>
-            {db.proizvodi.length===0?(
-              <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
-                <div style={{fontSize:36,marginBottom:10}}>📦</div>
-                <div>Baza je prazna. Sačuvajte kalkulaciju da dodate proizvod.</div>
-              </div>
-            ):(
-              <div style={card}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead><tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Naziv","Kupac","Tip","Struktura","Širina","Cena/1000m","Datum","Ko",""].map(function(h){return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;})}
-                  </tr></thead>
-                  <tbody>
-                    {db.proizvodi.map(function(p){
-                      return(
-                        <tr key={p.id} style={{borderBottom:"1px solid #f1f5f9"}}>
-                          <td style={{padding:"9px 8px",fontWeight:700}}>{p.naziv}</td>
-                          <td style={{padding:"9px 8px",color:"#64748b"}}>{p.kupac||"—"}</td>
-                          <td style={{padding:"9px 8px"}}><span style={{background:(TIP_BOJA[p.tip]||"#64748b")+"20",color:TIP_BOJA[p.tip]||"#64748b",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:10}}>{TIP_LAB[p.tip]||"—"}</span></td>
-                          <td style={{padding:"9px 8px",color:"#64748b",fontSize:11}}>{(p.mats||[]).filter(function(m){return m.tip;}).map(function(m){return m.tip+" "+m.deb+"µ";}).join(" / ")||"—"}</td>
-                          <td style={{padding:"9px 8px"}}>{p.sir?p.sir+" mm":"—"}</td>
-                          <td style={{padding:"9px 8px",fontWeight:700,color:"#1d4ed8"}}>{p.res&&p.res.k1?eu(p.res.k1):"—"}</td>
-                          <td style={{padding:"9px 8px",color:"#64748b"}}>{p.datum}</td>
-                          <td style={{padding:"9px 8px",color:"#64748b"}}>{p.ko}</td>
-                          <td style={{padding:"9px 8px"}}>
-                            {p.tip==="folija"&&<button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("kalk_folija");}}>Otvori</button>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <BazaProizvoda
+            db={db} setDb={setDb} card={card} inp={inp} lbl={lbl}
+            eu={eu} msg={msg} setPage={setPage}
+            TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}
+          />
         )}
 
         {/* PODESAVANJA */}
