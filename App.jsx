@@ -3,6 +3,7 @@ import { supabase } from "./supabase.js";
 import { LOGO_B64, SPULNA_B64 } from "./constants.js";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import Magacin from "./Magacin.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1338,6 +1339,7 @@ export default function App() {
     {k:"ponude",l:"Ponude",i:"📄"},
     {k:"nalozi",l:"Radni nalozi",i:"🔧"},
             {k:"baza",l:"Baza proizvoda",i:"📦"},
+            {k:"magacin",l:"Magacin",i:"🏭"},
       ];
   if(user.uloga==="admin")nav.push({k:"pod",l:"Podešavanja",i:"⚙️"});
 
@@ -1596,13 +1598,15 @@ export default function App() {
         )}
 
         {/* BAZA PROIZVODA */}
-        {page==="baza"&&(
-          <BazaProizvoda
+        {page==="baza"&&(          <BazaProizvoda
             db={db} setDb={setDb} card={card} inp={inp} lbl={lbl}
             eu={eu} msg={msg} setPage={setPage}
             TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}
           />
         )}
+
+        {/* MAGACIN */}
+        {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
 
         {/* PODESAVANJA */}
         {page==="pod"&&user.uloga==="admin"&&(
