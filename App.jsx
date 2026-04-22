@@ -1201,17 +1201,40 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
 }
 
 // ===================== MOBILNA STRANICA ZA RADNIKE =====================
+var ZASTOJI = [
+  {k:"Pauza za ručak",kat:"Planirani",i:"🍽️"},
+  {k:"Kratka pauza",kat:"Planirani",i:"☕"},
+  {k:"Promena smene",kat:"Planirani",i:"🔄"},
+  {k:"Kvar mašine",kat:"Tehnički",i:"⚙️"},
+  {k:"Održavanje mašine",kat:"Tehnički",i:"🧰"},
+  {k:"Promena podešavanja",kat:"Tehnički",i:"🔧"},
+  {k:"Nestanak struje/vazduha",kat:"Tehnički",i:"⚡"},
+  {k:"Nema materijala",kat:"Materijal",i:"📦"},
+  {k:"Nema boje",kat:"Materijal",i:"🎨"},
+  {k:"Zamena rolne",kat:"Materijal",i:"🔁"},
+  {k:"Loš materijal",kat:"Materijal",i:"⚠️"},
+  {k:"Čeka prethodni nalog",kat:"Priprema",i:"📋"},
+  {k:"Testiranje uzorka",kat:"Priprema",i:"🧪"},
+  {k:"Kalibracija",kat:"Priprema",i:"🎯"},
+  {k:"Kontrola kvaliteta",kat:"Kvalitet",i:"🔍"},
+  {k:"Dorada",kat:"Kvalitet",i:"♻️"},
+  {k:"Ostalo",kat:"Ostalo",i:"📝"},
+];
+
 function MobilniRadnik({nalogId}) {
   var [nalog,setNalog]=useState(null);
-  var [status,setStatus]=useState("ceka"); // ceka, u_toku, pauza, unos, zavrseno
+  var [status,setStatus]=useState("ceka");
   var [startTime,setStartTime]=useState(null);
   var [elapsed,setElapsed]=useState(0);
   var [pauzeVreme,setPauzeVreme]=useState(0);
   var [pauzeStart,setPauzeStart]=useState(null);
+  var [pauzeRazlog,setPauzeRazlog]=useState("");
+  var [pauzeNapomena,setPauzeNapomena]=useState("");
   var [uradjeno,setUradjeno]=useState("");
   var [skart,setSkart]=useState("");
   var [radnik,setRadnik]=useState("");
   var [loading,setLoading]=useState(true);
+  var [birePazu,setBirePazu]=useState(false);
 
   var IKONE={"Nalog za materijal":"📦","Nalog za stampu":"🖨️","Nalog za kasiranje":"🔗","Nalog za rezanje":"✂️","Nalog za perforaciju":"🔵","Nalog za lakiranje":"✨","Nalog za spulne":"🔄"};
 
@@ -1237,22 +1260,64 @@ function MobilniRadnik({nalogId}) {
     await supabase.from('nalozi').update({status:"U toku",radnik:radnik,start_time:now}).eq('id',nalogId);
   }
 
-  function pauza(){
-    if(status==="u_toku"){
-      setPauzeStart(Date.now());
-      setStatus("pauza");
-    }else{
-      var dodatno=Math.floor((Date.now()-pauzeStart)/1000);
-      setPauzeVreme(function(p){return p+dodatno;});
-      setPauzeStart(null);
-      setStatus("u_toku");
-    }
+  function kliknutaPauza(){
+    setBirePazu(true);
+  }
+
+  async function potvrdiPauzu(razlogObj){
+    var now=Date.now();
+    setPauzeStart(now);
+    setPauzeRazlog(razlogObj.k);
+    setStatus("pauza");
+    setBirePazu(false);
+    // Snimi zastoj u bazu
+    try{
+      await supabase.from('nalog_zastoji').insert([{
+        nalog_id:+nalogId,
+        razlog:razlogObj.k,
+        kategorija:razlogObj.kat,
+        start_time:new Date(now).toISOString(),
+        radnik:radnik||"nepoznat",
+        napomena:pauzeNapomena
+      }]);
+    }catch(e){console.error(e);}
+  }
+
+  async function nastavi(){
+    var now=Date.now();
+    var dodatno=Math.floor((now-pauzeStart)/1000);
+    setPauzeVreme(function(p){return p+dodatno;});
+    // Update zastoj u bazi
+    try{
+      var res=await supabase.from('nalog_zastoji')
+        .select('id')
+        .eq('nalog_id',+nalogId)
+        .is('end_time',null)
+        .order('id',{ascending:false})
+        .limit(1);
+      if(res.data&&res.data[0]){
+        await supabase.from('nalog_zastoji').update({
+          end_time:new Date(now).toISOString(),
+          trajanje:dodatno
+        }).eq('id',res.data[0].id);
+      }
+    }catch(e){console.error(e);}
+    setPauzeStart(null);
+    setPauzeRazlog("");
+    setPauzeNapomena("");
+    setStatus("u_toku");
   }
 
   async function zavrsi(){
     if(!uradjeno){alert("Unesite količinu!");return;}
     var now=new Date().toISOString();
-    await supabase.from('nalozi').update({status:"Završeno",end_time:now,vreme_rada:elapsed,uradjeno:+uradjeno,skart:+skart||0}).eq('id',nalogId);
+    await supabase.from('nalozi').update({
+      status:"Završeno",
+      end_time:now,
+      vreme_rada:elapsed,
+      uradjeno:+uradjeno,
+      skart:+skart||0
+    }).eq('id',nalogId);
     setStatus("zavrseno");
   }
 
@@ -1263,23 +1328,58 @@ function MobilniRadnik({nalogId}) {
 
   var ik=IKONE[nalog.naziv]||"🔧";
 
+  // ---- IZBOR RAZLOGA PAUZE ----
+  if(birePazu){
+    var grupirani={};
+    ZASTOJI.forEach(function(z){
+      if(!grupirani[z.kat])grupirani[z.kat]=[];
+      grupirani[z.kat].push(z);
+    });
+    var katBoje={"Planirani":"#8b5cf6","Tehnički":"#ef4444","Materijal":"#f59e0b","Priprema":"#0891b2","Kvalitet":"#ec4899","Ostalo":"#64748b"};
+    return(
+      <div style={{minHeight:"100vh",background:"#f8fafc",fontFamily:"'Segoe UI',system-ui,sans-serif",padding:16,maxWidth:420,margin:"0 auto"}}>
+        <div style={{background:"#fef3c7",borderRadius:12,padding:14,marginBottom:14,border:"2px solid #fde68a",textAlign:"center"}}>
+          <div style={{fontSize:24,marginBottom:4}}>⏸️</div>
+          <div style={{fontSize:15,fontWeight:800,color:"#92400e"}}>Razlog pauze/zastoja</div>
+          <div style={{fontSize:12,color:"#78716c",marginTop:2}}>Izaberi razlog za nastavak</div>
+        </div>
+        {Object.keys(grupirani).map(function(kat){
+          return(
+            <div key={kat} style={{marginBottom:14}}>
+              <div style={{fontSize:11,fontWeight:800,color:katBoje[kat],textTransform:"uppercase",marginBottom:6,paddingLeft:4,letterSpacing:0.5}}>{kat}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                {grupirani[kat].map(function(z){
+                  return(
+                    <button key={z.k} onClick={function(){potvrdiPauzu(z);}}
+                      style={{padding:"12px 10px",borderRadius:10,border:"1.5px solid "+katBoje[kat]+"40",background:"#fff",color:"#1e293b",fontWeight:700,fontSize:11,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:20}}>{z.i}</span>
+                      <span>{z.k}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+        <button onClick={function(){setBirePazu(false);}} style={{width:"100%",marginTop:10,padding:14,borderRadius:10,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>← Otkaži</button>
+      </div>
+    );
+  }
+
   return(
     <div style={{minHeight:"100vh",background:status==="u_toku"?"#f0fdf4":status==="pauza"?"#fffbeb":"#f8fafc",fontFamily:"'Segoe UI',system-ui,sans-serif",padding:20,maxWidth:420,margin:"0 auto"}}>
-      {/* HEADER */}
       <div style={{background:"#0f172a",borderRadius:14,padding:"14px 18px",marginBottom:16,color:"#fff"}}>
         <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Radni nalog</div>
         <div style={{fontSize:20,fontWeight:800}}>{nalog.ponBr}</div>
         <div style={{fontSize:14,color:"#93c5fd",marginTop:2}}>{nalog.kupac} · {nalog.prod}</div>
       </div>
 
-      {/* NALOG INFO */}
       <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid #e2e8f0",marginBottom:14,textAlign:"center"}}>
         <div style={{fontSize:40,marginBottom:8}}>{ik}</div>
         <div style={{fontSize:22,fontWeight:800,marginBottom:4}}>{nalog.naziv}</div>
         <div style={{fontSize:14,color:"#64748b"}}>Količina: <b>{(nalog.kol||0).toLocaleString()} m</b></div>
       </div>
 
-      {/* CEKA */}
       {status==="ceka"&&(
         <div>
           <div style={{marginBottom:12}}>
@@ -1290,23 +1390,30 @@ function MobilniRadnik({nalogId}) {
         </div>
       )}
 
-      {/* U TOKU / PAUZA */}
-      {(status==="u_toku"||status==="pauza")&&(
+      {status==="u_toku"&&(
         <div>
-          <div style={{background:status==="pauza"?"#fef3c7":"#dcfce7",borderRadius:14,padding:20,textAlign:"center",marginBottom:14,border:"2px solid "+(status==="pauza"?"#fde68a":"#bbf7d0")}}>
-            <div style={{fontSize:12,fontWeight:700,color:"#64748b",textTransform:"uppercase",marginBottom:8}}>{status==="pauza"?"⏸️ PAUSA":"⏱️ U TOKU"}</div>
-            <div style={{fontSize:52,fontWeight:900,color:status==="pauza"?"#f59e0b":"#059669",fontVariantNumeric:"tabular-nums"}}>{fmt(elapsed)}</div>
+          <div style={{background:"#dcfce7",borderRadius:14,padding:20,textAlign:"center",marginBottom:14,border:"2px solid #bbf7d0"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#64748b",textTransform:"uppercase",marginBottom:8}}>⏱️ U TOKU</div>
+            <div style={{fontSize:52,fontWeight:900,color:"#059669",fontVariantNumeric:"tabular-nums"}}>{fmt(elapsed)}</div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-            <button onClick={pauza} style={{padding:18,borderRadius:12,border:"none",background:status==="pauza"?"#059669":"#f59e0b",color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer"}}>
-              {status==="pauza"?"▶️ NASTAVI":"⏸️ PAUZA"}
-            </button>
+            <button onClick={kliknutaPauza} style={{padding:18,borderRadius:12,border:"none",background:"#f59e0b",color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer"}}>⏸️ PAUZA</button>
             <button onClick={function(){setStatus("unos");}} style={{padding:18,borderRadius:12,border:"none",background:"#1d4ed8",color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer"}}>⏹️ ZAVRŠI</button>
           </div>
         </div>
       )}
 
-      {/* UNOS REZULTATA */}
+      {status==="pauza"&&(
+        <div>
+          <div style={{background:"#fef3c7",borderRadius:14,padding:20,textAlign:"center",marginBottom:14,border:"2px solid #fde68a"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#92400e",textTransform:"uppercase",marginBottom:4}}>⏸️ PAUZA</div>
+            <div style={{fontSize:14,fontWeight:700,color:"#92400e",marginBottom:8}}>{pauzeRazlog}</div>
+            <div style={{fontSize:52,fontWeight:900,color:"#f59e0b",fontVariantNumeric:"tabular-nums"}}>{fmt(elapsed)}</div>
+          </div>
+          <button onClick={nastavi} style={{width:"100%",padding:18,borderRadius:12,border:"none",background:"#059669",color:"#fff",fontSize:18,fontWeight:800,cursor:"pointer"}}>▶️ NASTAVI RAD</button>
+        </div>
+      )}
+
       {status==="unos"&&(
         <div style={{background:"#fff",borderRadius:14,padding:20,border:"1px solid #e2e8f0"}}>
           <div style={{fontSize:16,fontWeight:700,marginBottom:16}}>📊 Unesi rezultate</div>
@@ -1325,7 +1432,6 @@ function MobilniRadnik({nalogId}) {
         </div>
       )}
 
-      {/* ZAVRSENO */}
       {status==="zavrseno"&&(
         <div style={{background:"#f0fdf4",borderRadius:14,padding:28,border:"2px solid #bbf7d0",textAlign:"center"}}>
           <div style={{fontSize:56,marginBottom:12}}>✅</div>
