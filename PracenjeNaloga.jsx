@@ -15,18 +15,17 @@ function fmt(sec) {
 
 function QRModal({nalog, onClose}) {
   var url = window.location.origin + "?nalog=" + nalog.id;
+  var qrSrc = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(url);
   return(
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:"#fff",borderRadius:16,padding:28,maxWidth:400,width:"90%",textAlign:"center",boxShadow:"0 25px 60px rgba(0,0,0,0.3)"}}>
+      <div style={{background:"#fff",borderRadius:16,padding:28,maxWidth:420,width:"90%",textAlign:"center",boxShadow:"0 25px 60px rgba(0,0,0,0.3)"}}>
         <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>{nalog.naziv}</div>
         <div style={{fontSize:13,color:"#64748b",marginBottom:20}}>{nalog.ponBr} · {nalog.kupac}</div>
-        <div style={{background:"#f8fafc",border:"3px solid #1d4ed8",borderRadius:12,padding:16,marginBottom:16,display:"inline-block"}}>
-          <div style={{fontSize:10,color:"#64748b",marginBottom:8}}>QR kod za skeniranje</div>
-          <div style={{width:150,height:150,background:"#0f172a",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto"}}>
-            <div style={{color:"#fff",fontSize:10,textAlign:"center",padding:8,wordBreak:"break-all"}}>{url.slice(0,50)}...</div>
-          </div>
+        <div style={{border:"3px solid #1d4ed8",borderRadius:12,padding:12,marginBottom:12,display:"inline-block",background:"#fff"}}>
+          <img src={qrSrc} alt="QR kod" style={{width:180,height:180,display:"block"}}/>
         </div>
-        <div style={{fontSize:11,color:"#94a3b8",marginBottom:16}}>Radnik skenira telefonom → otvara stranicu → START/STOP</div>
+        <div style={{fontSize:11,color:"#94a3b8",marginBottom:6,wordBreak:"break-all",padding:"0 10px"}}>{url}</div>
+        <div style={{fontSize:11,color:"#64748b",marginBottom:16}}>Radnik skenira telefonom → START/STOP timer</div>
         <div style={{display:"flex",gap:10,justifyContent:"center"}}>
           <button onClick={function(){window.print();}} style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>🖨️ Štampaj</button>
           <button onClick={onClose} style={{padding:"10px 20px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>Zatvori</button>
