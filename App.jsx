@@ -4,6 +4,7 @@ import { LOGO_B64, SPULNA_B64 } from "./constants.js";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import Magacin from "./Magacin.jsx";
+import KalkulatorKese2 from "./KalkulatorKese2.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1426,6 +1427,7 @@ export default function App() {
 
         {/* KALKULATORI */}
         {page==="kalk_folija"&&<KalkulatorFolije user={user} db={db} setDb={setDb} setPage={setPage} msg={msg} inp={inp} card={card} lbl={lbl}/>}
+        {page==="kalk_kesa"&&<KalkulatorKese2 user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
         {page==="kalk_spulna"&&<KalkulatorSpulne user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
 
         {/* PONUDE */}
