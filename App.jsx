@@ -1200,7 +1200,155 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
   );
 }
 
+// ===================== MOBILNA STRANICA ZA RADNIKE =====================
+function MobilniRadnik({nalogId}) {
+  var [nalog,setNalog]=useState(null);
+  var [status,setStatus]=useState("ceka"); // ceka, u_toku, pauza, unos, zavrseno
+  var [startTime,setStartTime]=useState(null);
+  var [elapsed,setElapsed]=useState(0);
+  var [pauzeVreme,setPauzeVreme]=useState(0);
+  var [pauzeStart,setPauzeStart]=useState(null);
+  var [uradjeno,setUradjeno]=useState("");
+  var [skart,setSkart]=useState("");
+  var [radnik,setRadnik]=useState("");
+  var [loading,setLoading]=useState(true);
+
+  var IKONE={"Nalog za materijal":"📦","Nalog za stampu":"🖨️","Nalog za kasiranje":"🔗","Nalog za rezanje":"✂️","Nalog za perforaciju":"🔵","Nalog za lakiranje":"✨","Nalog za spulne":"🔄"};
+
+  useEffect(function(){
+    supabase.from('nalozi').select('*').eq('id',nalogId).single().then(function(r){
+      if(r.data)setNalog(r.data);
+      setLoading(false);
+    });
+  },[nalogId]);
+
+  useEffect(function(){
+    if(status!=="u_toku"||!startTime)return;
+    var t=setInterval(function(){
+      setElapsed(Math.floor((Date.now()-new Date(startTime).getTime())/1000)-pauzeVreme);
+    },1000);
+    return function(){clearInterval(t);};
+  },[status,startTime,pauzeVreme]);
+
+  async function pocni(){
+    var now=new Date().toISOString();
+    setStartTime(now);
+    setStatus("u_toku");
+    await supabase.from('nalozi').update({status:"U toku",radnik:radnik,start_time:now}).eq('id',nalogId);
+  }
+
+  function pauza(){
+    if(status==="u_toku"){
+      setPauzeStart(Date.now());
+      setStatus("pauza");
+    }else{
+      var dodatno=Math.floor((Date.now()-pauzeStart)/1000);
+      setPauzeVreme(function(p){return p+dodatno;});
+      setPauzeStart(null);
+      setStatus("u_toku");
+    }
+  }
+
+  async function zavrsi(){
+    if(!uradjeno){alert("Unesite količinu!");return;}
+    var now=new Date().toISOString();
+    await supabase.from('nalozi').update({status:"Završeno",end_time:now,vreme_rada:elapsed,uradjeno:+uradjeno,skart:+skart||0}).eq('id',nalogId);
+    setStatus("zavrseno");
+  }
+
+  var fmt=function(s){var h=Math.floor(s/3600);var m=Math.floor((s%3600)/60);var sec=s%60;return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0");};
+
+  if(loading)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif",color:"#94a3b8"}}>⏳ Učitavam...</div>;
+  if(!nalog)return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif",color:"#ef4444"}}>❌ Nalog nije pronađen!</div>;
+
+  var ik=IKONE[nalog.naziv]||"🔧";
+
+  return(
+    <div style={{minHeight:"100vh",background:status==="u_toku"?"#f0fdf4":status==="pauza"?"#fffbeb":"#f8fafc",fontFamily:"'Segoe UI',system-ui,sans-serif",padding:20,maxWidth:420,margin:"0 auto"}}>
+      {/* HEADER */}
+      <div style={{background:"#0f172a",borderRadius:14,padding:"14px 18px",marginBottom:16,color:"#fff"}}>
+        <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>Radni nalog</div>
+        <div style={{fontSize:20,fontWeight:800}}>{nalog.ponBr}</div>
+        <div style={{fontSize:14,color:"#93c5fd",marginTop:2}}>{nalog.kupac} · {nalog.prod}</div>
+      </div>
+
+      {/* NALOG INFO */}
+      <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid #e2e8f0",marginBottom:14,textAlign:"center"}}>
+        <div style={{fontSize:40,marginBottom:8}}>{ik}</div>
+        <div style={{fontSize:22,fontWeight:800,marginBottom:4}}>{nalog.naziv}</div>
+        <div style={{fontSize:14,color:"#64748b"}}>Količina: <b>{(nalog.kol||0).toLocaleString()} m</b></div>
+      </div>
+
+      {/* CEKA */}
+      {status==="ceka"&&(
+        <div>
+          <div style={{marginBottom:12}}>
+            <label style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",display:"block",marginBottom:6}}>Tvoje ime (opciono)</label>
+            <input value={radnik} onChange={function(e){setRadnik(e.target.value);}} style={{width:"100%",padding:"12px 16px",borderRadius:10,border:"1.5px solid #e2e8f0",fontSize:16,outline:"none",boxSizing:"border-box"}} placeholder="npr. Milan"/>
+          </div>
+          <button onClick={pocni} style={{width:"100%",padding:20,borderRadius:16,border:"none",background:"#059669",color:"#fff",fontSize:22,fontWeight:800,cursor:"pointer"}}>▶️ POČNI RAD</button>
+        </div>
+      )}
+
+      {/* U TOKU / PAUZA */}
+      {(status==="u_toku"||status==="pauza")&&(
+        <div>
+          <div style={{background:status==="pauza"?"#fef3c7":"#dcfce7",borderRadius:14,padding:20,textAlign:"center",marginBottom:14,border:"2px solid "+(status==="pauza"?"#fde68a":"#bbf7d0")}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#64748b",textTransform:"uppercase",marginBottom:8}}>{status==="pauza"?"⏸️ PAUSA":"⏱️ U TOKU"}</div>
+            <div style={{fontSize:52,fontWeight:900,color:status==="pauza"?"#f59e0b":"#059669",fontVariantNumeric:"tabular-nums"}}>{fmt(elapsed)}</div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <button onClick={pauza} style={{padding:18,borderRadius:12,border:"none",background:status==="pauza"?"#059669":"#f59e0b",color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer"}}>
+              {status==="pauza"?"▶️ NASTAVI":"⏸️ PAUZA"}
+            </button>
+            <button onClick={function(){setStatus("unos");}} style={{padding:18,borderRadius:12,border:"none",background:"#1d4ed8",color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer"}}>⏹️ ZAVRŠI</button>
+          </div>
+        </div>
+      )}
+
+      {/* UNOS REZULTATA */}
+      {status==="unos"&&(
+        <div style={{background:"#fff",borderRadius:14,padding:20,border:"1px solid #e2e8f0"}}>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:16}}>📊 Unesi rezultate</div>
+          <div style={{marginBottom:12}}>
+            <label style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",display:"block",marginBottom:6}}>Urađena količina (m) *</label>
+            <input type="number" value={uradjeno} onChange={function(e){setUradjeno(e.target.value);}} style={{width:"100%",padding:"14px 16px",borderRadius:10,border:"2px solid #1d4ed8",fontSize:22,fontWeight:700,outline:"none",boxSizing:"border-box"}} placeholder="0"/>
+          </div>
+          <div style={{marginBottom:16}}>
+            <label style={{fontSize:11,fontWeight:700,color:"#64748b",textTransform:"uppercase",display:"block",marginBottom:6}}>Škart (m)</label>
+            <input type="number" value={skart} onChange={function(e){setSkart(e.target.value);}} style={{width:"100%",padding:"12px 16px",borderRadius:10,border:"1.5px solid #e2e8f0",fontSize:18,outline:"none",boxSizing:"border-box"}} placeholder="0"/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <button onClick={function(){setStatus("u_toku");}} style={{padding:14,borderRadius:10,border:"1px solid #e2e8f0",background:"#f8fafc",color:"#64748b",fontSize:14,fontWeight:700,cursor:"pointer"}}>← Nazad</button>
+            <button onClick={zavrsi} style={{padding:14,borderRadius:10,border:"none",background:"#059669",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>✅ Potvrdi</button>
+          </div>
+        </div>
+      )}
+
+      {/* ZAVRSENO */}
+      {status==="zavrseno"&&(
+        <div style={{background:"#f0fdf4",borderRadius:14,padding:28,border:"2px solid #bbf7d0",textAlign:"center"}}>
+          <div style={{fontSize:56,marginBottom:12}}>✅</div>
+          <div style={{fontSize:22,fontWeight:800,color:"#166534",marginBottom:10}}>Završeno!</div>
+          <div style={{fontSize:14,color:"#064e3b",marginBottom:4}}>Vreme rada: <b>{fmt(elapsed)}</b></div>
+          <div style={{fontSize:14,color:"#064e3b",marginBottom:4}}>Urađeno: <b>{(+uradjeno).toLocaleString()} m</b></div>
+          {+skart>0&&<div style={{fontSize:14,color:"#ef4444"}}>Škart: <b>{(+skart).toLocaleString()} m</b></div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
+
+  // ---- MOBILNA STRANICA ZA RADNIKE (QR skeniranje) ----
+  var urlParams = new URLSearchParams(window.location.search);
+  var nalogIdParam = urlParams.get("nalog");
+  if (nalogIdParam) {
+    return <MobilniRadnik nalogId={nalogIdParam}/>;
+  }
+  // -----------------------------------------------------
+
   const [user,setUser]=useState(null);
   const [page,setPage]=useState("dash");
   const [db,setDb]=useState({proizvodi:[],ponude:[],nalozi:[]});
