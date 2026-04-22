@@ -1186,8 +1186,6 @@ function KalkulatorSpulne({user,msg,setPage,inp,card,lbl}) {
   );
 }
 
-// ===================== KALKULATOR KESE =====================
-
 // ===================== PONUDE PAGE =====================
 function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,pdfLoading,pregPonudaRef,downloadPDF,kreirajNalogeIzPonude,odbijPonudu,setPage,TIP_BOJA,TIP_LAB}) {
   var [filterKupac,setFilterKupac]=useState("");
