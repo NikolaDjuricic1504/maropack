@@ -5,6 +5,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import Magacin from "./Magacin.jsx";
 import KalkulatorKese2 from "./KalkulatorKese2.jsx";
+import PracenjeNaloga from "./PracenjeNaloga.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1339,6 +1340,7 @@ export default function App() {
     {k:"kalk_spulna",l:"Kalk. špulne",i:"🔄"},
     {k:"ponude",l:"Ponude",i:"📄"},
     {k:"nalozi",l:"Radni nalozi",i:"🔧"},
+            {k:"pracenje",l:"Praćenje",i:"🔴"},
             {k:"baza",l:"Baza proizvoda",i:"📦"},
             {k:"magacin",l:"Magacin",i:"🏭"},
       ];
@@ -1609,6 +1611,7 @@ export default function App() {
 
         {/* MAGACIN */}
         {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
+        {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
 
         {/* PODESAVANJA */}
         {page==="pod"&&user.uloga==="admin"&&(
