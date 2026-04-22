@@ -1016,19 +1016,19 @@ function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,
         <div style={{background:"#fff",borderRadius:16,padding:28,width:520,boxShadow:"0 20px 60px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"}}>
           <div style={{fontSize:16,fontWeight:800,marginBottom:18,color:"#1d4ed8"}}>✏️ Izmena ponude {ep.broj}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-            <div><label style={lbl}>Kupac</label><input style={inp} value={ep.kupac||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{kupac:e.target.value});});}/></div>
-            <div><label style={lbl}>Naziv</label><input style={inp} value={ep.naziv||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{naziv:e.target.value});});}}/></div>
-            <div><label style={lbl}>Količina</label><input type="number" style={inp} value={ep.kol||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{kol:+e.target.value});});}}/></div>
-            <div><label style={lbl}>Cena/jed.</label><input type="number" step="0.01" style={inp} value={ep.c1||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{c1:+e.target.value,uk:(+e.target.value)*(+p.kol||1)});});}}/></div>
-            <div><label style={lbl}>Ukupno €</label><input type="number" step="0.01" style={inp} value={ep.uk||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{uk:+e.target.value});});}}/></div>
-            <div><label style={lbl}>Važi do</label><input style={inp} value={ep.vaz||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{vaz:e.target.value});});}}/></div>
+            <div><label style={lbl}>Kupac</label><input style={inp} value={ep.kupac||""} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{kupac:v});});}/></div>
+            <div><label style={lbl}>Naziv</label><input style={inp} value={ep.naziv||""} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{naziv:v});});}/></div>
+            <div><label style={lbl}>Količina</label><input type="number" style={inp} value={ep.kol||""} onChange={function(e){var v=+e.target.value;setEditPonuda(function(p){return Object.assign({},p,{kol:v});});}/></div>
+            <div><label style={lbl}>Cena/jed.</label><input type="number" step="0.01" style={inp} value={ep.c1||""} onChange={function(e){var v=+e.target.value;setEditPonuda(function(p){return Object.assign({},p,{c1:v,uk:v*(+p.kol||1)});});}/></div>
+            <div><label style={lbl}>Ukupno €</label><input type="number" step="0.01" style={inp} value={ep.uk||""} onChange={function(e){var v=+e.target.value;setEditPonuda(function(p){return Object.assign({},p,{uk:v});});}/></div>
+            <div><label style={lbl}>Važi do</label><input style={inp} value={ep.vaz||""} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{vaz:v});});}/></div>
             <div><label style={lbl}>Status</label>
-              <select style={inp} value={ep.status||"Aktivna"} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{status:e.target.value});});}}>
+              <select style={inp} value={ep.status||"Aktivna"} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{status:v});})}}>
                 <option>Aktivna</option><option>Odobrena</option><option>Odbijena</option>
               </select>
             </div>
           </div>
-          <div style={{marginBottom:14}}><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={ep.nap||""} onChange={function(e){setEditPonuda(function(p){return Object.assign({},p,{nap:e.target.value});})}}/></div>
+          <div style={{marginBottom:14}}><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={ep.nap||""} onChange={function(e){var v=e.target.value;setEditPonuda(function(p){return Object.assign({},p,{nap:v});})}}/></div>
           <div style={{display:"flex",gap:10}}>
             <button style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){sacuvajIzmene(ep);}}>💾 Sacuvaj izmene</button>
             <button style={{padding:"10px 18px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setEditPonuda(null);}}>Otkaži</button>
