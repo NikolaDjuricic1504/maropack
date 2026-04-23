@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
 import NalogFolija from "./NalogFolija.jsx";
-import NalogKesaView from "./NalogKesaNew.jsx";
 
 var dnow = function() { return new Date().toLocaleDateString("sr-RS"); };
 
@@ -191,9 +190,6 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
 
   // Otvori prikaz naloga
   if(otvoreniNalog) {
-    if(otvoreniNalog.tip==="kesa") {
-      return <NalogKesaView nalog={otvoreniNalog} onClose={function(){setOtvoreniNalog(null);}} msg={msg}/>;
-    }
     return <NalogFolija nalog={otvoreniNalog} onClose={function(){setOtvoreniNalog(null);}} msg={msg}/>;
   }
 
