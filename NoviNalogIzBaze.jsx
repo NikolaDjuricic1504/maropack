@@ -146,14 +146,10 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
       var brN = "MP-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9000)+1000);
       var zaRad = Math.round(+forma.kol*(1+(+forma.sk/100)));
 
-      var baza = {
-        ponBr:brN, kupac:forma.kupac, prod:izabran.naziv,
-        tip:izabran.tip||"folija", kol:+forma.kol,
-        datum:forma.datum, datumIsp:forma.datumIsp,
-        status:"Ceka", ko:user.ime,
+      var nalogData = {
+        datumIsp:forma.datumIsp, sk:+forma.sk,
         mats:izabran.mats||[], sir:+(izabran.sir||0), ik:+(izabran.ik||izabran.sir||0),
-        sk:+forma.sk, grafika:forma.grafika,
-        stm:forma.stm, brBoja:forma.brBoja, smer:forma.smer,
+        grafika:forma.grafika, stm:forma.stm, brBoja:forma.brBoja, smer:forma.smer,
         obimValjka:forma.obimValjka, hilzna:forma.hilzna,
         tipPerf:forma.tipPerf, oblikPerf:forma.oblikPerf,
         razmakPerf:forma.razmakPerf, brzinaPerf:forma.brzinaPerf,
@@ -163,7 +159,14 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
         obelezavanje:forma.obelezavanje, pakovanjeRolni:forma.pakovanjeRolni,
         paleta:forma.paleta, tipLepka:forma.tipLepka,
         lepakOdnos:forma.lepakOdnos, lepakNanos:forma.lepakNanos,
-        rezFormati:forma.rezFormati, nap:forma.nap,
+        rezFormati:forma.rezFormati,
+      };
+
+      var baza = {
+        ponBr:brN, kupac:forma.kupac, prod:izabran.naziv,
+        tip:izabran.tip||"folija", kol:+forma.kol,
+        datum:forma.datum, status:"Ceka", ko:user.ime,
+        nap:forma.nap, kesaData:nalogData,
       };
 
       var NAZIVI = {mat:"Nalog za materijal",stm:"Nalog za stampu",kas:"Nalog za kasiranje",prf:"Nalog za perforaciju",rez:"Nalog za rezanje"};
@@ -175,7 +178,8 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
       if(res.error) throw res.error;
 
       msg("✅ Kreirano "+inserts.length+" naloga! Br: "+brN);
-      setOtvoreniNalog(baza);
+      // Pass full data for display including nalogData
+      setOtvoreniNalog(Object.assign({}, baza, nalogData, {ponBr:brN, kesaData:nalogData}));
       setIzabran(null);
       setForma(null);
     } catch(e) { msg("Greška: "+e.message,"err"); }
