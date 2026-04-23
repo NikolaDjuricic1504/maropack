@@ -6,6 +6,8 @@ import jsPDF from "jspdf";
 import Magacin from "./Magacin.jsx";
 import KalkulatorKese2 from "./KalkulatorKese2.jsx";
 import PracenjeNaloga from "./PracenjeNaloga.jsx";
+import NalogFolija from "./NalogFolija.jsx";
+import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -316,119 +318,6 @@ function PrintA4({data,onClose}) {
 }
 
 // ===================== NALOG IZ BAZE (bez ponude) =====================
-function NoviNalogIzBaze({user,db,msg,setPage,inp,card,lbl,dnow}) {
-  const [izabranProiz,setIzabranProiz]=useState(null);
-  const [kupac,setKupac]=useState("");
-  const [kol,setKol]=useState("");
-  const [datumIsp,setDatumIsp]=useState("");
-  const [napomena,setNapomena]=useState("");
-  const [filter,setFilter]=useState("");
-
-  var filtrirani=db.proizvodi.filter(function(p){
-    return !filter||p.naziv.toLowerCase().includes(filter.toLowerCase())||((p.kupac||"").toLowerCase().includes(filter.toLowerCase()));
-  });
-
-  async function kreirajNaloge(){
-    if(!izabranProiz){msg("Izaberite proizvod!","err");return;}
-    if(!kupac.trim()){msg("Unesite kupca!","err");return;}
-    if(!kol||+kol<=0){msg("Unesite količinu!","err");return;}
-    var p=izabranProiz;
-    var vm=(p.mats||[]).filter(function(m){return m.tip;});
-    var brKas=vm.reduce(function(s,m){return s+(+m.kas||0);},0);
-    var brLak=vm.reduce(function(s,m){return s+(+m.lak||0);},0);
-    var hasSt=vm.some(function(m){return m.stamp;});
-    var brNaloga="MP-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9000)+1000);
-    var tipovi=[];
-    tipovi.push({naziv:"Nalog za materijal",ik:"box",boj:"#f59e0b"});
-    if(hasSt)tipovi.push({naziv:"Nalog za stampu",ik:"print",boj:"#3b82f6"});
-    for(var i=1;i<=brKas;i++)tipovi.push({naziv:"Nalog za kasiranje "+i,ik:"link",boj:"#1d4ed8"});
-    tipovi.push({naziv:"Nalog za rezanje",ik:"cut",boj:"#6366f1"});
-    tipovi.push({naziv:"Nalog za perforaciju",ik:"circle",boj:"#8b5cf6"});
-    if(brLak>0)tipovi.push({naziv:"Nalog za lakiranje",ik:"star",boj:"#7c3aed"});
-    var novi=tipovi.map(function(t){
-      return {ponBr:brNaloga,ponId:null,kupac:kupac,prod:p.naziv,naziv:t.naziv,ik:t.ik,boj:t.boj,status:"Ceka",datum:dnow(),radnik:"",nap:napomena,kol:+kol*1000,mats:p.mats,tip:p.tip||"folija",datumIsp:datumIsp};
-    });
-    try{
-      const {error}=await supabase.from('nalozi').insert(novi);
-      if(error)throw error;
-      msg("Kreirano "+novi.length+" naloga iz baze!");
-      setPage("nalozi");
-    }catch(e){msg("Greška: "+e.message,"err");}
-  }
-
-  return(
-    <div>
-      <h2 style={{margin:"0 0 18px",fontSize:20,fontWeight:800}}>⚡ Nalog iz baze proizvoda</h2>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-        {/* Lista proizvoda */}
-        <div style={card}>
-          <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📦 Izaberi proizvod</div>
-          <input style={Object.assign({},inp,{marginBottom:10})} placeholder="Pretraži po nazivu ili kupcu..." value={filter} onChange={function(e){setFilter(e.target.value);}}/>
-          <div style={{maxHeight:400,overflowY:"auto"}}>
-            {filtrirani.length===0?(
-              <div style={{textAlign:"center",padding:30,color:"#94a3b8"}}>Nema proizvoda u bazi.</div>
-            ):filtrirani.map(function(p){
-              var sel=izabranProiz&&izabranProiz.id===p.id;
-              return(
-                <div key={p.id} onClick={function(){setIzabranProiz(p);if(p.kupac)setKupac(p.kupac);}} style={{padding:"10px 12px",borderRadius:8,border:"1.5px solid "+(sel?"#1d4ed8":"#e2e8f0"),background:sel?"#eff6ff":"#f8fafc",cursor:"pointer",marginBottom:6}}>
-                  <div style={{fontWeight:700,fontSize:13,color:sel?"#1d4ed8":"#0f172a"}}>{p.naziv}</div>
-                  <div style={{fontSize:11,color:"#64748b",marginTop:2}}>
-                    {p.kupac&&<span style={{marginRight:10}}>👤 {p.kupac}</span>}
-                    {(p.mats||[]).filter(function(m){return m.tip;}).map(function(m){return m.tip+" "+m.deb+"µ";}).join(" / ")}
-                  </div>
-                  {p.res&&p.res.k1&&<div style={{fontSize:11,fontWeight:700,color:"#059669",marginTop:2}}>{(+p.res.k1).toFixed(2).replace(".",",")} € / 1000m</div>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Detalji i kreiranje */}
-        <div>
-          {izabranProiz?(
-            <>
-              <div style={Object.assign({},card,{marginBottom:14,background:"#eff6ff",border:"1.5px solid #bfdbfe"})}>
-                <div style={{fontSize:13,fontWeight:700,marginBottom:10,color:"#1d4ed8"}}>📋 Izabran: {izabranProiz.naziv}</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:12}}>
-                  {(izabranProiz.mats||[]).filter(function(m){return m.tip;}).map(function(m,i){
-                    return(
-                      <div key={i} style={{padding:"6px 8px",background:"#fff",borderRadius:6,border:"1px solid #bfdbfe"}}>
-                        <span style={{fontWeight:700,color:["#1d4ed8","#7c3aed","#0891b2","#059669"][i]}}>{["A","B","C","D"][i]}: </span>
-                        <span style={{fontWeight:600}}>{m.tip} {m.deb}µ</span>
-                        {m.kas>0&&<span style={{color:"#1d4ed8",marginLeft:4}}>🔗{m.kas}×</span>}
-                        {m.lak>0&&<span style={{color:"#7c3aed",marginLeft:4}}>✨{m.lak}×</span>}
-                        {m.stamp&&<span style={{color:"#0891b2",marginLeft:4}}>🖨️</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={card}>
-                <div style={{fontSize:13,fontWeight:700,marginBottom:12}}>🔧 Parametri naloga</div>
-                <div style={{display:"grid",gap:10}}>
-                  <div><label style={lbl}>Kupac *</label><input style={inp} value={kupac} onChange={function(e){setKupac(e.target.value);}} placeholder="Naziv kupca"/></div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                    <div><label style={lbl}>Nalog x1000m *</label><input type="number" style={inp} value={kol} onChange={function(e){setKol(e.target.value);}}/></div>
-                    <div><label style={lbl}>Datum isporuke</label><input style={inp} value={datumIsp} onChange={function(e){setDatumIsp(e.target.value);}}/></div>
-                  </div>
-                  <div><label style={lbl}>Napomena</label><textarea style={Object.assign({},inp,{height:60,resize:"vertical"})} value={napomena} onChange={function(e){setNapomena(e.target.value);}}/></div>
-                </div>
-                <button style={{width:"100%",marginTop:14,padding:"12px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"}} onClick={kreirajNaloge}>
-                  🔧 Kreiraj radne naloge
-                </button>
-              </div>
-            </>
-          ):(
-            <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
-              <div style={{fontSize:36,marginBottom:10}}>⚡</div>
-              <div>Izaberite proizvod iz liste levo</div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ===================== KALKULATOR FOLIJE =====================
 function KalkulatorFolije({user,db,setDb,setPage,msg,inp,card,lbl}) {
@@ -1595,6 +1484,7 @@ export default function App() {
     {k:"ponude",l:"Ponude",i:"📄"},
     {k:"nalozi",l:"Radni nalozi",i:"🔧"},
             {k:"pracenje",l:"Praćenje",i:"🔴"},
+            {k:"novi_nalog",l:"Nalog iz baze",i:"⚡"},
             {k:"baza",l:"Baza proizvoda",i:"📦"},
             {k:"magacin",l:"Magacin",i:"🏭"},
       ];
@@ -1866,6 +1756,7 @@ export default function App() {
         {/* MAGACIN */}
         {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
         {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
+        {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
 
         {/* PODESAVANJA */}
         {page==="pod"&&user.uloga==="admin"&&(
