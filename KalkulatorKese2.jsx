@@ -455,10 +455,6 @@ export default function KalkulatorKese2({user,msg,setPage,inp,card,lbl}) {
     }catch(e){msg("Greška: "+e.message,"err");}
   }
 
-  if(nalogKesa){
-    return <NalogKesaView nalog={nalogKesa} onClose={function(){setNalogKesa(null);}} msg={msg}/>;
-  }
-
   useEffect(function(){
     supabase.from('kese').select('*').order('created_at',{ascending:false}).then(function(r){setKese(r.data||[]);});
   },[]);
@@ -570,6 +566,10 @@ export default function KalkulatorKese2({user,msg,setPage,inp,card,lbl}) {
         </select>
       </div>
     );
+  }
+
+  if(nalogKesa){
+    return <NalogKesaView nalog={nalogKesa} onClose={function(){setNalogKesa(null);}} msg={msg}/>;
   }
 
   return(
