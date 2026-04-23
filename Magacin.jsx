@@ -195,7 +195,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
     setLoading(false);
   }
 
-  // ===== PDF UPLOAD =====
+  // ===== PDF UPLOAD — parsira direktno u browseru =====
   async function handlePdfUpload(e) {
     var file = e.target.files[0];
     if(!file) return;
@@ -203,69 +203,154 @@ export default function Magacin({msg, inp, card, lbl, user}) {
     setParsedRolne([]);
 
     try {
-      // Use Claude API to parse PDF
       var reader = new FileReader();
       reader.onload = async function(ev) {
-        var base64 = ev.target.result.split(",")[1];
+        var arrayBuffer = ev.target.result;
         try {
-          var response = await fetch("https://api.anthropic.com/v1/messages", {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({
-              model:"claude-sonnet-4-20250514",
-              max_tokens:4000,
-              messages:[{
-                role:"user",
-                content:[
-                  {type:"document", source:{type:"base64", media_type:"application/pdf", data:base64}},
-                  {type:"text", text:`Extract all individual rolls from this packing list PDF. Return ONLY a JSON array, no other text. Each roll object must have:
-- tip: material type string (e.g. "CC White 55g", "BOPP 20mic", "OPP 30mic", "FXC", "FXPU", etc.)
-- sirina: width in mm as integer
-- metraza: length in meters as number  
-- kg_bruto: gross weight kg as number
-- kg_neto: net weight kg as number
-- lot: LOT number string (e.g. "U26/00064")
-- sch: Sch number string (e.g. "61905/7")
-- palet: pallet number string
-- dobavljac: supplier name string
-Example: [{"tip":"CC White 55g","sirina":1440,"metraza":12258,"kg_bruto":1017,"kg_neto":994,"lot":"U26/00064","sch":"61905/7","palet":"2604676","dobavljac":"Rossella S.p.A."}]`}
-                ]
-              }]
-            })
-          });
-          var data = await response.json();
-          var text = (data.content||[]).map(function(c){return c.text||"";}).join("");
-          var clean = text.replace(/```json|```/g,"").trim();
-          var parsed = JSON.parse(clean);
-          if(Array.isArray(parsed) && parsed.length > 0) {
-            // Add default fields
-            parsed = parsed.map(function(r) {
-              return Object.assign({
-                metraza_ost: r.metraza,
-                dobavljac: dobavljacImport || r.dobavljac || "",
-                datum: datumImport,
-                napomena: "",
-                status: "Na stanju"
-              }, r);
+          // Load PDF.js dynamically
+          if(!window.pdfjsLib) {
+            await new Promise(function(res, rej) {
+              var s = document.createElement("script");
+              s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+              s.onload = res; s.onerror = rej;
+              document.head.appendChild(s);
             });
-            setParsedRolne(parsed);
-            msg("Parsirano "+parsed.length+" rolni iz PDF!");
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+              "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+          }
+
+          var pdf = await window.pdfjsLib.getDocument({data: arrayBuffer}).promise;
+          var fullText = "";
+          for(var i=1; i<=pdf.numPages; i++) {
+            var page = await pdf.getPage(i);
+            var content = await page.getTextContent();
+            var pageText = content.items.map(function(item){ return item.str; }).join(" ");
+            fullText += pageText + "
+";
+          }
+
+          // Parse the extracted text
+          var rolne = parsePdfTextLocally(fullText, dobavljacImport, datumImport);
+          if(rolne.length > 0) {
+            setParsedRolne(rolne);
+            msg("Parsirano "+rolne.length+" rolni iz PDF!");
           } else {
-            msg("Nema rolni u PDF!", "err");
+            msg("Nema rolni pronađenih u PDF. Pokušaj ručni unos.", "err");
           }
         } catch(err) {
-          msg("Greška pri parsiranju: "+err.message, "err");
+          msg("Greška pri čitanju PDF: "+err.message, "err");
         }
         setParseLoading(false);
       };
-      reader.readAsDataURL(file);
+      reader.readAsArrayBuffer(file);
     } catch(e) {
       msg("Greška: "+e.message, "err");
       setParseLoading(false);
     }
   }
 
-  // ===== EXCEL UPLOAD =====
+  // Lokalni parser teksta iz packing liste
+  function parsePdfTextLocally(text, dob, dat) {
+    var rolne = [];
+    var lines = text.split(/\n|\r/);
+    var currentRolna = null;
+
+    // Extract supplier
+    var dobavljac = dob || "";
+    if(!dobavljac) {
+      var supMatch = text.match(/(Rossella|Taghleef|Treofan|Jindal|UFlex|Kopafilm|Manucor)/i);
+      if(supMatch) dobavljac = supMatch[0];
+    }
+
+    for(var i=0; i<lines.length; i++) {
+      var line = lines[i].trim();
+      if(!line || line.length < 3) continue;
+
+      // Skip header lines
+      if(/^(Page|Description|Shipping|Customer|Summary|MAROPACK|NOVOSADSKA|RAKOVAC|SERBIA|Package|Wooden|Total:|Pallets no\.|Via IV)/i.test(line)) continue;
+
+      // Gross/Net weight line — završi trenutnu rolnu
+      if(/Gross wt/i.test(line)) {
+        if(currentRolna) {
+          var gm = line.match(/Gross wt\.?\s*Kg[:\s]*([\d.,]+)/i);
+          var nm = line.match(/Net wt\.?\s*Kg[:\s]*([\d.,]+)/i);
+          if(gm) currentRolna.kg_bruto = parseFloat(gm[1].replace(",",""));
+          if(nm) currentRolna.kg_neto = parseFloat(nm[1].replace(",",""));
+          rolne.push(Object.assign({}, currentRolna));
+          currentRolna = null;
+        }
+        continue;
+      }
+
+      // Pallet line — uzmi Sch i Pallet broj
+      if(/Pallet/i.test(line)) {
+        if(currentRolna) {
+          var schM = line.match(/Sch\.?[:\s]*([\w/]+)/i);
+          var palM = line.match(/Pallet[:\s]*(\d+)/i);
+          if(schM) currentRolna.sch = schM[1].trim();
+          if(palM) currentRolna.palet = palM[1];
+        }
+        continue;
+      }
+
+      // Prepoznaj tip materijala
+      var tip = "";
+      var upper = line.toUpperCase();
+      if(/CLAY COATED|CC WHITE/i.test(line)) {
+        var gMatch = line.match(/0?(\d{2,3})\s*g/i);
+        tip = "CC White " + (gMatch ? gMatch[1]+"g" : "");
+      } else if(/FXPU/i.test(line)) tip = "FXPU";
+      else if(/FXCB/i.test(line)) tip = "FXCB";
+      else if(/FXC/i.test(line)) tip = "FXC";
+      else if(/BOPP SEDEF/i.test(line)) tip = "BOPP SEDEF";
+      else if(/BOPP/i.test(line)) tip = "BOPP";
+      else if(/OPP/i.test(line)) tip = "OPP";
+      else if(/PET/i.test(line)) tip = "PET";
+      else if(/CPP/i.test(line)) tip = "CPP";
+      else if(/LDPE|LLDPE/i.test(line)) tip = "LDPE";
+      else if(/PAPIR|PAPER|SILICONIZ/i.test(line)) tip = "Papir";
+      else if(/ALU|ALUM/i.test(line)) tip = "ALU";
+
+      if(!tip) continue;
+
+      // Izvuci širinu (3-4 cifre + mm)
+      var wMatch = line.match(/(\d{3,4})\s*mm/i);
+      if(!wMatch) continue;
+      var sirina = parseInt(wMatch[1]);
+      if(sirina < 50 || sirina > 3000) continue;
+
+      // Izvuci metrazu (broj sa tačkom kao separator hiljada npr 12.258 ili 12,258)
+      var metMatch = line.match(/(\d{1,2}[.,]\d{3}(?:[.,]\d+)?)/);
+      var metraza = metMatch ? parseFloat(metMatch[1].replace(/\./g,"").replace(",",".")) : 0;
+      if(metraza < 100) continue;
+
+      // Izvuci LOT
+      var lotM = line.match(/([A-Z]\d{2}\/\d{4,6})/);
+      var lot = lotM ? lotM[1] : "";
+
+      if(currentRolna) rolne.push(Object.assign({}, currentRolna));
+
+      currentRolna = {
+        tip: tip,
+        sirina: sirina,
+        metraza: metraza,
+        metraza_ost: metraza,
+        lot: lot,
+        dobavljac: dobavljac,
+        datum: dat || new Date().toLocaleDateString("sr-RS"),
+        sch: "",
+        palet: "",
+        kg_bruto: 0,
+        kg_neto: 0,
+        napomena: line.substring(0, 80).trim(),
+        status: "Na stanju"
+      };
+    }
+    if(currentRolna) rolne.push(currentRolna);
+    return rolne;
+  }
+
+  // ===== EXCEL UPLOAD — SheetJS lokalno =====
   async function handleExcelUpload(e) {
     var file = e.target.files[0];
     if(!file) return;
@@ -273,41 +358,99 @@ Example: [{"tip":"CC White 55g","sirina":1440,"metraza":12258,"kg_bruto":1017,"k
     setParsedRolne([]);
 
     try {
+      // Load SheetJS dynamically
+      if(!window.XLSX) {
+        await new Promise(function(res, rej) {
+          var s = document.createElement("script");
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+
       var reader = new FileReader();
-      reader.onload = async function(ev) {
-        var base64 = ev.target.result.split(",")[1];
+      reader.onload = function(ev) {
         try {
-          var response = await fetch("https://api.anthropic.com/v1/messages", {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({
-              model:"claude-sonnet-4-20250514",
-              max_tokens:4000,
-              messages:[{
-                role:"user",
-                content:[
-                  {type:"document", source:{type:"base64", media_type:"application/pdf", data:base64}},
-                  {type:"text", text:`This is a packing list document. Extract all individual rolls/items. Return ONLY a JSON array. Each object: tip (material type), sirina (width mm, integer), metraza (meters, number), kg_bruto, kg_neto, lot, sch, palet, dobavljac. No other text.`}
-                ]
-              }]
-            })
+          var data = new Uint8Array(ev.target.result);
+          var workbook = window.XLSX.read(data, {type:"array"});
+          var allText = "";
+
+          // Combine all sheets into text
+          workbook.SheetNames.forEach(function(sheetName) {
+            var sheet = workbook.Sheets[sheetName];
+            var csv = window.XLSX.utils.sheet_to_csv(sheet);
+            allText += csv + "
+";
           });
-          var data = await response.json();
-          var text = (data.content||[]).map(function(c){return c.text||"";}).join("");
-          var clean = text.replace(/```json|```/g,"").trim();
-          var parsed = JSON.parse(clean);
-          if(Array.isArray(parsed)) {
-            parsed = parsed.map(function(r){
-              return Object.assign({metraza_ost:r.metraza, datum:datumImport, napomena:"", status:"Na stanju"}, r);
-            });
-            setParsedRolne(parsed);
-            msg("Parsirano "+parsed.length+" rolni!");
+
+          // Parse the CSV text using the same local parser
+          var rolne = parsePdfTextLocally(allText, dobavljacImport, datumImport);
+
+          // Also try CSV row-by-row parsing for structured Excel files
+          if(rolne.length === 0) {
+            rolne = parseExcelCsvLocally(allText, dobavljacImport, datumImport);
           }
-        } catch(err) { msg("Greška: "+err.message, "err"); }
+
+          if(rolne.length > 0) {
+            setParsedRolne(rolne);
+            msg("Parsirano "+rolne.length+" rolni iz Excel!");
+          } else {
+            msg("Nema rolni pronađenih. Proveri format fajla.", "err");
+          }
+        } catch(err) { msg("Greška pri čitanju Excel: "+err.message, "err"); }
         setParseLoading(false);
       };
-      reader.readAsDataURL(file);
-    } catch(e) { setParseLoading(false); }
+      reader.readAsArrayBuffer(file);
+    } catch(e) {
+      msg("Greška: "+e.message, "err");
+      setParseLoading(false);
+    }
+  }
+
+  // CSV parser za strukturirane Excel packing liste
+  function parseExcelCsvLocally(csv, dob, dat) {
+    var rolne = [];
+    var lines = csv.split("
+");
+    var tipovi = ["BOPP","OPP","PET","CPP","LDPE","FXC","FXPU","ALU","Papir","CC White"];
+
+    for(var i=0; i<lines.length; i++) {
+      var cols = lines[i].split(",").map(function(c){ return c.replace(/"/g,"").trim(); });
+      if(cols.length < 3) continue;
+
+      var tip = "", sirina = 0, metraza = 0, kg = 0, lot = "", sch = "";
+
+      cols.forEach(function(v) {
+        if(!v) return;
+        // Tip materijala
+        for(var j=0; j<tipovi.length; j++) {
+          if(v.toUpperCase().indexOf(tipovi[j].toUpperCase()) >= 0) { tip = v; break; }
+        }
+        // Sirina mm
+        var wm = v.match(/^(\d{3,4})$/);
+        if(wm && parseInt(wm[1]) >= 100 && parseInt(wm[1]) <= 3000) sirina = parseInt(wm[1]);
+        // Metraza
+        var mm = v.match(/^(\d{4,6})([.,]\d+)?$/);
+        if(mm && parseFloat(mm[1]) > 500) metraza = parseFloat(mm[1]);
+        // Kg
+        var km = v.match(/^(\d{2,4})([.,]\d+)?$/);
+        if(km && parseFloat(km[1]) > 50 && parseFloat(km[1]) < 5000 && metraza > 0 && parseFloat(km[1]) < metraza) kg = parseFloat(km[1]);
+        // LOT
+        if(/^[A-Z]\d{2}\/\d{4,6}$/.test(v)) lot = v;
+        // Sch
+        if(/^\d{4,6}\/\d{1,3}$/.test(v)) sch = v;
+      });
+
+      if(tip && sirina > 0 && metraza > 0) {
+        rolne.push({
+          tip, sirina, metraza, metraza_ost: metraza,
+          lot, dobavljac: dob||"", datum: dat||new Date().toLocaleDateString("sr-RS"),
+          sch, palet:"", kg_bruto: Math.round(kg*1.02), kg_neto: kg,
+          napomena:"", status:"Na stanju"
+        });
+      }
+    }
+    return rolne;
   }
 
   // ===== UVOZ ROLNI =====
