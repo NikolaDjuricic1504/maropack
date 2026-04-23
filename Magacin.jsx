@@ -225,8 +225,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
             var page = await pdf.getPage(i);
             var content = await page.getTextContent();
             var pageText = content.items.map(function(item){ return item.str; }).join(" ");
-            fullText += pageText + "
-";
+            fullText += pageText + "\n";
           }
 
           // Parse the extracted text
