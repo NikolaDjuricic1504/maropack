@@ -378,8 +378,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
           workbook.SheetNames.forEach(function(sheetName) {
             var sheet = workbook.Sheets[sheetName];
             var csv = window.XLSX.utils.sheet_to_csv(sheet);
-            allText += csv + "
-";
+            allText += csv + "\n";
           });
 
           // Parse the CSV text using the same local parser
