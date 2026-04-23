@@ -144,7 +144,7 @@ function Kartica({children}) {
   return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",marginBottom:24}}>{children}</div>;
 }
 
-export default function NalogKesaView({nalog, onClose, msg}) {
+function NalogKesaView({nalog, onClose, msg}) {
   var [tab, setTab] = useState("mat");
   var [rolne, setRolne] = useState([]);
 
