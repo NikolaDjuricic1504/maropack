@@ -101,20 +101,21 @@ export default function NalogFolija({nalog, onClose, msg}) {
   var [rolne, setRolne] = useState([]);
   var [loading, setLoading] = useState(true);
 
-  // Merge kesaData (JSONB) with nalog root fields
-  var d = Object.assign({}, nalog.kesaData||{}, nalog);
+  // d merges nalog root + mats/res (which contain nalogData)
+  var extra = (typeof nalog.mats === "object" && !Array.isArray(nalog.mats)) ? nalog.mats : {};
+  var d = Object.assign({}, extra, nalog);
   var n = d;
   var brN = d.ponBr || d.br || "MP-0000";
   var kupac = d.kupac || "—";
   var naziv = d.prod || d.naziv || "—";
   var datum = d.datum || new Date().toLocaleDateString("sr-RS");
-  var datumIsp = d.datumIsp || "";
-  var mats = (d.kesaData && d.kesaData.mats) || d.mats || [];
+  var datumIsp = extra.datumIsp || d.datumIsp || "";
+  var mats = extra.mats || [];
   var kolM = +(d.kol||0);
-  var sk = +((d.kesaData && d.kesaData.sk) || d.sk || 10);
+  var sk = +(extra.sk || d.sk || 10);
   var zaRad = Math.round(kolM*(1+sk/100));
-  var sir = +((d.kesaData && d.kesaData.sir) || d.sir || 0);
-  var ik = +((d.kesaData && d.kesaData.ik) || d.ik || sir);
+  var sir = +(extra.sir || d.sir || 0);
+  var ik = +(extra.ik || d.ik || sir);
 
   useEffect(function(){
     if(!ik) { setLoading(false); return; }
