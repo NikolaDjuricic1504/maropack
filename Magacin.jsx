@@ -408,8 +408,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
   // CSV parser za strukturirane Excel packing liste
   function parseExcelCsvLocally(csv, dob, dat) {
     var rolne = [];
-    var lines = csv.split("
-");
+    var lines = csv.split("\n");
     var tipovi = ["BOPP","OPP","PET","CPP","LDPE","FXC","FXPU","ALU","Papir","CC White"];
 
     for(var i=0; i<lines.length; i++) {
