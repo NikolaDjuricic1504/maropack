@@ -348,6 +348,46 @@ function KalkulatorFolije({user,db,setDb,setPage,msg,inp,card,lbl}) {
   const [aktivna,setAktivna]=useState(null);
   const [pdfLoading,setPdfLoading]=useState(false);
   const ponudaRef=useRef(null);
+  const [nalogFolija,setNalogFolija]=useState(null);
+
+  async function kreirajNalogeDirectno(){
+    if(!naziv.trim()||!pkupac.trim()){msg("Unesite naziv i kupca!","err");return;}
+    if(!res){msg("Najpre sačinite kalkulaciju!","err");return;}
+    var vm=mats.filter(function(m){return m.tip&&m.deb;});
+    var brN="MP-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9000)+1000);
+    var ik=+sir;
+    var nalogData={
+      datumIsp:"",sk:+sk,
+      mats:vm.map(function(m){return {tip:m.tip,deb:m.deb};}),
+      sir:+sir, ik:ik,
+      grafika:"Nov posao", stm:"Flexo", brBoja:"4", smer:"Desno",
+      obimValjka:"", hilzna:"76",
+      tipPerf:"", oblikPerf:"Fina (mikro)", razmakPerf:"", brzinaPerf:"120",
+      secivo:"Zilet", stranaRez:"Stampa spolja",
+      rezBrTraka:"", precnikRolne:"do 600mm", duzinaRolne:"5000",
+      korona:"Ne", obelezavanje:"Crvena traka",
+      pakovanjeRolni:"Svaka pojedinacno", paleta:"Euro paleta",
+      tipLepka:"PU solventni", lepakOdnos:"3:1", lepakNanos:"3,5",
+      rezFormati:[],
+    };
+    var NAZIVI={mat:"Nalog za materijal",stm:"Nalog za stampu",kas:"Nalog za kasiranje",rez:"Nalog za rezanje"};
+    var inserts=Object.keys(NAZIVI).map(function(k){
+      return {ponBr:brN,kupac:pkupac,prod:naziv,tip:"folija",kol:+nal*1000,
+        datum:new Date().toLocaleDateString("sr-RS"),status:"Ceka",ko:user.ime,
+        nap:pnap,mats:nalogData,res:res,naziv:NAZIVI[k]};
+    });
+    try{
+      var r=await supabase.from("nalozi").insert(inserts);
+      if(r.error)throw r.error;
+      msg("Kreirano "+inserts.length+" naloga! Br: "+brN);
+      setNalogFolija(Object.assign({},nalogData,{ponBr:brN,kupac:pkupac,prod:naziv,
+        kol:+nal*1000,datum:new Date().toLocaleDateString("sr-RS"),mats:nalogData}));
+    }catch(e){msg("Greska: "+e.message,"err");}
+  }
+
+  if(nalogFolija){
+    return <NalogFolija nalog={nalogFolija} onClose={function(){setNalogFolija(null);}} msg={msg}/>;
+  }
 
   const calc=useCallback(function(){
     var vm=mats.filter(function(m){return m.tip&&m.deb;});
@@ -585,6 +625,7 @@ function KalkulatorFolije({user,db,setDb,setPage,msg,inp,card,lbl}) {
           )}
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={kreirajPonudu}>📄 Kreiraj ponudu</button>
+            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={kreirajNalogeDirectno}>⚡ Kreiraj naloge direktno</button>
             {aktivna&&(
               <>
                 <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){kreirajNaloge(aktivna);}}>🔧 Kreiraj naloge</button>
@@ -1334,13 +1375,43 @@ function MobilniRadnik({nalogId}) {
   );
 }
 
+// Mobilna stranica za radnike - pronalazi nalog po ponBr+suffix
+function MobilniRadnikPonBr({ponBr}) {
+  var [nalogId, setNalogId] = useState(null);
+  var [greska, setGreska] = useState(false);
+
+  useEffect(function(){
+    supabase.from('nalozi').select('id').eq('ponBr', ponBr).single()
+      .then(function(r){
+        if(r.data) setNalogId(r.data.id);
+        else {
+          // Try matching ponBr prefix (e.g. MP-2026-1042 matches MP-2026-1042-7)
+          var base = ponBr.replace(/-\d+$/, '');
+          supabase.from('nalozi').select('id').eq('ponBr', base).limit(1)
+            .then(function(r2){
+              if(r2.data && r2.data[0]) setNalogId(r2.data[0].id);
+              else setGreska(true);
+            });
+        }
+      });
+  }, [ponBr]);
+
+  if(greska) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif",flexDirection:"column",gap:12}}><div style={{fontSize:48}}>❌</div><div style={{color:"#ef4444",fontWeight:700}}>Nalog nije pronađen: {ponBr}</div></div>;
+  if(!nalogId) return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif",color:"#94a3b8"}}>⏳ Učitavam nalog...</div>;
+  return <MobilniRadnik nalogId={nalogId}/>;
+}
+
 export default function App() {
 
   // ---- MOBILNA STRANICA ZA RADNIKE (QR skeniranje) ----
   var urlParams = new URLSearchParams(window.location.search);
   var nalogIdParam = urlParams.get("nalog");
+  var ponBrParam = urlParams.get("ponbr");
   if (nalogIdParam) {
     return <MobilniRadnik nalogId={nalogIdParam}/>;
+  }
+  if (ponBrParam) {
+    return <MobilniRadnikPonBr ponBr={ponBrParam}/>;
   }
   // -----------------------------------------------------
 

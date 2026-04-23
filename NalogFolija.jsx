@@ -22,7 +22,7 @@ function Hdr({naslov, brN, suffix, boja, kupac, datum, datumIsp}) {
       </div>
       <div style={{textAlign:"center",flexShrink:0}}>
         <div style={{background:"#fff",borderRadius:8,padding:6,display:"inline-block"}}>
-          <img src={QR(window.location.origin+"?nalog="+brN+suffix)} width={80} height={80} alt="QR" style={{display:"block"}}/>
+          <img src={QR(window.location.origin+"?ponbr="+brN+suffix)} width={80} height={80} alt="QR" style={{display:"block"}}/>
         </div>
         <div style={{fontSize:8,color:"#94a3b8",marginTop:3}}>Skeniraj telefonom</div>
       </div>
