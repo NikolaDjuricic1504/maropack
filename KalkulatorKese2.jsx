@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
+import NalogKesaView from "./NalogKesaNew.jsx";
 
 const OPCIJE = {
   duplofan: ["Nema","Obična","Permanentna","Permanentna bezbedna za hranu","Široka","NE"],
@@ -76,6 +77,37 @@ export default function KalkulatorKese2({user,msg,setPage,inp,card,lbl}) {
   var [pkupac,setPkupac]=useState("");
   var [pnap,setPnap]=useState("");
   var [aktivna,setAktivna]=useState(null);
+  var [nalogKesa,setNalogKesa]=useState(null);
+
+  async function kreirajNalogeKesa(){
+    if(!pkupac.trim()){msg("Unesite kupca!","err");return;}
+    if(!sirina||!duzina){msg("Unesite dimenzije kese!","err");return;}
+    var ik = Math.round((+sirina + (+klapna||0)*2 + 20));
+    var brN = "MP-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9000)+1000);
+    var nalogData = {
+      datumIsp:"", sk:+sk, materijal:materijal,
+      sirina:+sirina, duzina:+duzina, klapna:+klapna||0,
+      ik:ik, takta:+takta, ban:+ban, opcije:opts,
+    };
+    var NAZIVI = {mat:"Nalog za materijal",kes:"Nalog za kesičarenje",rez:"Nalog za rezanje"};
+    var inserts = Object.keys(NAZIVI).map(function(k){
+      return {ponBr:brN,kupac:pkupac,prod:naziv||("Kesa "+sirina+"×"+duzina+(klapna?"+"+klapna:"")),
+        tip:"kesa",kol:+kol,datum:new Date().toLocaleDateString("sr-RS"),
+        status:"Ceka",ko:user.ime,nap:pnap,mats:nalogData,naziv:NAZIVI[k]};
+    });
+    try{
+      var r = await supabase.from("nalozi").insert(inserts);
+      if(r.error) throw r.error;
+      msg("✅ Kreirano 3 naloga! Br: "+brN);
+      setNalogKesa(Object.assign({},nalogData,{ponBr:brN,kupac:pkupac,
+        prod:naziv||("Kesa "+sirina+"×"+duzina+(klapna?"+"+klapna:"")),
+        kol:+kol,datum:new Date().toLocaleDateString("sr-RS"),mats:nalogData}));
+    }catch(e){msg("Greška: "+e.message,"err");}
+  }
+
+  if(nalogKesa){
+    return <NalogKesaView nalog={nalogKesa} onClose={function(){setNalogKesa(null);}} msg={msg}/>;
+  }
 
   useEffect(function(){
     supabase.from('kese').select('*').order('created_at',{ascending:false}).then(function(r){setKese(r.data||[]);});
@@ -400,7 +432,10 @@ export default function KalkulatorKese2({user,msg,setPage,inp,card,lbl}) {
                     );
                   })}
                 </div>
-                <button onClick={function(){setPkupac(izabranaKesa&&izabranaKesa.kupac?izabranaKesa.kupac:"");setTab("pon");}} style={{width:"100%",marginTop:14,padding:"10px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>📄 Kreiraj ponudu</button>
+                <div style={{display:"flex",gap:8,marginTop:14}}>
+                  <button onClick={function(){setPkupac(izabranaKesa&&izabranaKesa.kupac?izabranaKesa.kupac:"");setTab("pon");}} style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>📄 Kreiraj ponudu</button>
+                  <button onClick={function(){setPkupac(izabranaKesa&&izabranaKesa.kupac?izabranaKesa.kupac:"");kreirajNalogeKesa();}} style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:"#0f172a",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>⚡ Kreiraj naloge</button>
+                </div>
               </div>
             ):(
               <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
@@ -424,6 +459,7 @@ export default function KalkulatorKese2({user,msg,setPage,inp,card,lbl}) {
           </div>
           <div style={{display:"flex",gap:10}}>
             <button onClick={kreirajPonudu} style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>📄 Kreiraj ponudu</button>
+            <button onClick={kreirajNalogeKesa} style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#0f172a",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>⚡ Kreiraj radne naloge</button>
             {aktivna&&<div style={{padding:"10px 14px",borderRadius:8,background:"#f0fdf4",border:"1px solid #bbf7d0",color:"#166534",fontSize:12,fontWeight:700}}>✅ Ponuda {aktivna.broj} kreirana!</div>}
           </div>
         </div>
