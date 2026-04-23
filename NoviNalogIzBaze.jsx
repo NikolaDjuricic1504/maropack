@@ -144,7 +144,7 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
     setSaving(true);
     try {
       var brN = "MP-"+new Date().getFullYear()+"-"+String(Math.floor(Math.random()*9000)+1000);
-      var zaRad = Math.round(+forma.kol*(1++forma.sk/100));
+      var zaRad = Math.round(+forma.kol*(1+(+forma.sk/100)));
 
       var baza = {
         ponBr:brN, kupac:forma.kupac, prod:izabran.naziv,
@@ -190,7 +190,7 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
   // Forma za kreiranje
   if(izabran && forma) {
     var p = izabran;
-    var zaRad = forma.kol ? Math.round(+forma.kol*(1++forma.sk/100)) : 0;
+    var zaRad = forma.kol ? Math.round(+forma.kol*(1+(+forma.sk/100))) : 0;
     var ik = +(p.ik||p.sir||0);
 
     return (
@@ -261,7 +261,7 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
                 </div>
                 {zaRad>0&&(
                   <div style={{padding:10,background:"#fef3c7",borderRadius:8,border:"1px solid #fde68a",fontSize:12}}>
-                    ⚠️ Za rad: <b>{zaRad.toLocaleString()} m</b> (naručeno × {(1++forma.sk/100).toFixed(2)})
+                    ⚠️ Za rad: <b>{zaRad.toLocaleString()} m</b> (naručeno × {(1+(+forma.sk/100)).toFixed(2)})
                   </div>
                 )}
                 <div><label style={lbl}>Grafičko rešenje</label>
