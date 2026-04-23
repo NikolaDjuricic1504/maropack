@@ -166,7 +166,9 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
         ponBr:brN, kupac:forma.kupac, prod:izabran.naziv,
         tip:izabran.tip||"folija", kol:+forma.kol,
         datum:forma.datum, status:"Ceka", ko:user.ime,
-        nap:forma.nap, kesaData:nalogData,
+        nap:forma.nap,
+        mats:nalogData,
+        res:nalogData,
       };
 
       var NAZIVI = {mat:"Nalog za materijal",stm:"Nalog za stampu",kas:"Nalog za kasiranje",prf:"Nalog za perforaciju",rez:"Nalog za rezanje"};
@@ -179,7 +181,7 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
 
       msg("✅ Kreirano "+inserts.length+" naloga! Br: "+brN);
       // Pass full data for display including nalogData
-      setOtvoreniNalog(Object.assign({}, baza, nalogData, {ponBr:brN, kesaData:nalogData}));
+      setOtvoreniNalog(Object.assign({}, baza, nalogData, {ponBr:brN}));
       setIzabran(null);
       setForma(null);
     } catch(e) { msg("Greška: "+e.message,"err"); }
