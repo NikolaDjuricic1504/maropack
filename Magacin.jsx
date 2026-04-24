@@ -495,9 +495,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
 
     // Ako nema blokova sa Pallet, probaj linijski parsing
     if(rolne.length === 0) {
-      var lines = text.split(/[
-
-]+/);
+      var lines = text.split(/[\n\r]+/);
       var currentTip = null;
       for(var j=0; j<lines.length; j++) {
         var line = lines[j];
