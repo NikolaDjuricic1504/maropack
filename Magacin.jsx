@@ -3,14 +3,35 @@ import { supabase } from "./supabase.js";
 
 var dnow = function() { return new Date().toLocaleDateString("sr-RS"); };
 
-var MAT_TIPOVI = [
-  "BOPP","BOPP SEDEF","BOPP BELI","LDPE","CPP","PET","OPA","OPP","PLA","HDPE","ALU",
-  "CELULOZA","CELOFAN","PA","PA/PE","FXC","FXCB","FXCU","FXCM","FXCMT","FXCMTS",
-  "FXCFM","FXCAF","FXCLS","FXCMB","FXCWP","FXCW","FXCHFM","FXPU","FXPF","FXPA",
-  "FXPMT","FXPBR","FXPLA","FXPLF","FXPFM","FXPFB","FXA","FXS","FXAA",
-  "OPP30","OPP35","HSD31","BTHL BOPP","CC White 55g","CC White 60g",
-  "Papir","Papir silikonizani"
-];
+// Tipovi materijala sa debljinama i gustocama - isti kao u kalkulatoru
+var MAT_DATA_MAG = {
+  "BOPP": [5,10,12,15,18,20,25,28,30,35,40,45,50,55,60,65,70].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "BOPP SEDEF": [5,10,15,20,25,30,35,38,40,45].map(function(d){return {d:d,t:+(d*0.65).toFixed(2)};}),
+  "BOPP BELI": [5,10,15,20,25,30,35,40,45,50].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "LDPE": [10,15,20,25,30,35,40,45,50,55,60].map(function(d){return {d:d,t:+(d*0.925).toFixed(2)};}),
+  "CPP": [5,10,15,18,20,25,28,30,35,40,45,50,55,60].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "PET": [12,15,19,20,21,36,50,150].map(function(d){return {d:d,t:+(d*1.4).toFixed(2)};}),
+  "OPA": [12,15,20,25,30,35,40].map(function(d){return {d:d,t:+(d*1.1).toFixed(2)};}),
+  "OPP": [5,10,15,18,20,25,28,30,35,40,45,50].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "PLA": [5,10,15,20,25,30,35,40,45].map(function(d){return {d:d,t:+(d*1.24).toFixed(2)};}),
+  "HDPE": [5,8,12,15,17,20,25,30,35,40,45,50].map(function(d){return {d:d,t:+(d*0.94).toFixed(2)};}),
+  "ALU": [7,9,12,15,20,25,30,35,40,45,50].map(function(d){return {d:d,t:+(d*2.71).toFixed(2)};}),
+  "PA": [10,15,20,23,28,30,35,40,45,50].map(function(d){return {d:d,t:+(d*1.14).toFixed(2)};}),
+  "PA/PE": [10,15,20,23,28,30,35,40,45,50].map(function(d){return {d:d,t:+(d*1.0).toFixed(2)};}),
+  "FXC": [12,15,18,20,25,28,29,30,35,40].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "FXCB": [12,15,18,20,25,30,35,40].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "FXPU": [18,20,25,28,29,30,35,40].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "FXPA": [15,18,20,25,30,35].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "HSD": [28,29,30,31,32,35,40].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
+  "CC White 55g": [{d:0,t:55}],
+  "CC White 60g": [{d:0,t:60}],
+  "CC White 70g": [{d:0,t:70}],
+  "CC White 80g": [{d:0,t:80}],
+  "Papir": [{d:0,t:60},{d:0,t:70},{d:0,t:80},{d:0,t:90}],
+  "Papir silikonizani": [{d:0,t:65},{d:0,t:80}],
+};
+
+var MAT_TIPOVI = Object.keys(MAT_DATA_MAG);
 
 // g/m² po tipu i debljini za auto-izracun kg
 var GSM_TABELA = {
@@ -731,7 +752,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Br. rolne","Tip","Deb (mic)","Širina","Ostalo (m)","Kg neto","LOT","Sch.","Lokacija","Datum","Status",""].map(function(h){
+                    {["Br. rolne","Tip","Deb (µ)","Širina","Ostalo (m)","Kg neto","LOT","Sch.","Lokacija","Datum","Status",""].map(function(h){
                       return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>;
                     })}
                   </tr>
@@ -742,7 +763,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                       <tr key={r.id} style={{borderBottom:"1px solid #f1f5f9",opacity:r.status==="Iskorišćeno"?0.5:1}}>
                         <td style={{padding:"8px",fontWeight:700,color:"#1d4ed8",whiteSpace:"nowrap"}}>{r.br_rolne}</td>
                         <td style={{padding:"8px",fontWeight:600}}>{r.tip}</td>
-                        <td style={{padding:"8px",color:"#7c3aed",fontWeight:600}}>{r.deb>0?r.deb+"mic":"—"}</td>
+                        <td style={{padding:"8px",color:"#7c3aed",fontWeight:600}}>{r.deb>0?r.deb+"µ":"—"}</td>
                         <td style={{padding:"8px"}}>{r.sirina}mm</td>
                         <td style={{padding:"8px",fontWeight:700,color:(r.metraza_ost||0)<(r.metraza||1)*0.2?"#ef4444":"#059669"}}>
                           {(r.metraza_ost||r.metraza||0).toLocaleString()}m
@@ -825,7 +846,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                   <div style={{overflowX:"auto"}}>
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                       <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                        {["Tip","Deb (mic)","Širina","Metraža","Kg neto","LOT","Sch.","Lokacija"].map(function(h){
+                        {["Tip","Deb (µ)","Širina","Metraža","Kg neto","LOT","Sch.","Lokacija"].map(function(h){
                           return <th key={h} style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;
                         })}
                       </tr></thead>
@@ -834,7 +855,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                           return (
                             <tr key={i} style={{borderBottom:"1px solid #f1f5f9"}}>
                               <td style={{padding:"6px 8px",fontWeight:600}}>{r.tip}</td>
-                              <td style={{padding:"6px 8px",color:"#7c3aed",fontWeight:600}}>{r.deb>0?r.deb+"mic":"—"}</td>
+                              <td style={{padding:"6px 8px",color:"#7c3aed",fontWeight:600}}>{r.deb>0?r.deb+"µ":"—"}</td>
                               <td style={{padding:"6px 8px"}}>{r.sirina}mm</td>
                               <td style={{padding:"6px 8px",color:"#059669",fontWeight:600}}>{(r.metraza||0).toLocaleString()}m</td>
                               <td style={{padding:"6px 8px",fontWeight:600}}>{r.kg_neto||"?"} kg</td>
@@ -917,32 +938,63 @@ export default function Magacin({msg, inp, card, lbl, user}) {
             <div style={card}>
               <div style={{fontSize:14,fontWeight:700,marginBottom:16,color:"#7c3aed"}}>✍️ Ručni unos rolne</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
-                <div>
+                <div style={{gridColumn:"span 2"}}>
                   <label style={lbl}>Tip materijala *</label>
                   <select style={inp} value={form.tip} onChange={function(e){
                     var v=e.target.value;
                     setForm(function(f){
-                      var kg=izracunajKg(v,f.deb,f.sirina,f.metraza);
-                      return Object.assign({},f,{tip:v,kg_neto:kg.kg_neto||f.kg_neto,kg_bruto:kg.kg_bruto||f.kg_bruto});
+                      // Reset deb kad se menja tip
+                      return Object.assign({},f,{tip:v,deb:"",gsm:"",kg_neto:"",kg_bruto:""});
                     });
                   }}>
-                    <option value="">-- Izaberi --</option>
+                    <option value="">-- Izaberi tip --</option>
                     {MAT_TIPOVI.map(function(t){return <option key={t} value={t}>{t}</option>;})}
                   </select>
                 </div>
   
-                {/* Debljina */}
+                {/* Debljina - padajuca lista sa µ simbolom */}
                 <div>
-                  <label style={lbl}>Debljina (mic) *</label>
-                  <input type="number" style={inp} value={form.deb} placeholder="npr. 20"
+                  <label style={lbl}>Debljina (µ)</label>
+                  <select style={Object.assign({},inp,{color:form.tip&&(MAT_DATA_MAG[form.tip]||[]).length>0?"#1e293b":"#94a3b8"})}
+                    value={form.deb}
+                    disabled={!form.tip}
                     onChange={function(e){
                       var v=e.target.value;
                       setForm(function(f){
-                        var kg = izracunajKg(f.tip, v, f.sirina, f.metraza);
-                        return Object.assign({},f,{deb:v, kg_neto:kg.kg_neto||f.kg_neto, kg_bruto:kg.kg_bruto||f.kg_bruto});
+                        // Auto-izracun gsm iz MAT_DATA_MAG
+                        var arr=MAT_DATA_MAG[f.tip]||[];
+                        var obj=arr.find(function(o){return String(o.d)===String(v);});
+                        var gsmVal=obj?obj.t:f.gsm;
+                        var kg=izracunajKg(f.tip,v,f.sirina,f.metraza);
+                        return Object.assign({},f,{deb:v,gsm:gsmVal,
+                          kg_neto:kg.kg_neto||f.kg_neto,
+                          kg_bruto:kg.kg_bruto||f.kg_bruto});
                       });
-                    }}/>
-                  <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>0 = papir/CC White (koristiti g/m²)</div>
+                    }}>
+                    <option value="">-- Izaberi µ --</option>
+                    {(MAT_DATA_MAG[form.tip]||[]).map(function(o){
+                      return <option key={o.d} value={o.d}>
+                        {o.d>0?o.d+"µ":"— ("+o.t+" g/m²)"} &nbsp; {o.d>0?"("+o.t+" g/m²)":""}
+                      </option>;
+                    })}
+                  </select>
+                  {form.tip && (MAT_DATA_MAG[form.tip]||[]).length===0 && (
+                    <input type="number" style={Object.assign({},inp,{marginTop:4})} value={form.deb}
+                      placeholder="unesi ručno µ"
+                      onChange={function(e){
+                        var v=e.target.value;
+                        setForm(function(f){
+                          var kg=izracunajKg(f.tip,v,f.sirina,f.metraza);
+                          return Object.assign({},f,{deb:v,kg_neto:kg.kg_neto||f.kg_neto,kg_bruto:kg.kg_bruto||f.kg_bruto});
+                        });
+                      }}/>
+                  )}
+                  {form.deb>0 && (
+                    <div style={{fontSize:10,color:"#7c3aed",marginTop:2,fontWeight:600}}>
+                      {form.deb}µ = {(MAT_DATA_MAG[form.tip]||[]).find(function(o){return String(o.d)===String(form.deb);})?
+                        (MAT_DATA_MAG[form.tip]||[]).find(function(o){return String(o.d)===String(form.deb);}).t+" g/m²":"—"}
+                    </div>
+                  )}
                 </div>
 
                 {/* Sirina */}
@@ -971,23 +1023,22 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                     }}/>
                 </div>
 
-                {/* g/m2 samo za papir/CC */}
-                {(!form.deb || +form.deb===0) && (
-                  <div>
-                    <label style={lbl}>g/m² (za papir/CC)</label>
-                    <input type="number" style={inp} value={form.gsm} placeholder="npr. 55"
-                      onChange={function(e){
-                        var v=e.target.value;
-                        setForm(function(f){
-                          var kg2=v&&f.sirina&&f.metraza?{
-                            kg_neto:Math.round(+v*+f.sirina/1000*+f.metraza/1000*10)/10,
-                            kg_bruto:Math.round(+v*+f.sirina/1000*+f.metraza/1000*1.025*10)/10
-                          }:{kg_neto:f.kg_neto,kg_bruto:f.kg_bruto};
-                          return Object.assign({},f,{gsm:v,kg_neto:kg2.kg_neto,kg_bruto:kg2.kg_bruto});
-                        });
-                      }}/>
+                {/* g/m2 prikaz - automatski iz MAT_DATA_MAG */}
+                <div>
+                  <label style={lbl}>g/m² (spec. težina)</label>
+                  <div style={Object.assign({},inp,{background:"#f1f5f9",color:"#7c3aed",fontWeight:600})}>
+                    {(function(){
+                      if(!form.tip) return "—";
+                      var arr=MAT_DATA_MAG[form.tip]||[];
+                      if(form.deb) {
+                        var obj=arr.find(function(o){return String(o.d)===String(form.deb);});
+                        if(obj) return obj.t+" g/m²";
+                      }
+                      if(arr.length===1&&arr[0].d===0) return arr[0].t+" g/m²";
+                      return "— (izaberi µ)";
+                    })()}
                   </div>
-                )}
+                </div>
 
                 {/* Auto-izracunato kg */}
                 {(form.kg_neto>0||form.kg_bruto>0) && (
