@@ -9,7 +9,7 @@ import PracenjeNaloga from "./PracenjeNaloga.jsx";
 import NalogFolija from "./NalogFolija.jsx";
 import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
 import AIpanel from "./AIpanel.jsx";
-import AIsecenjePreview from "./AIsecenjePreview.jsx";
+import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1839,8 +1839,8 @@ export default function App() {
 
         {/* MAGACIN */}
         {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
-        {page==="ai"&&<AIpanel />}
-        {page==="secenje"&&<AIsecenjePreview />}
+        {page==="ai"&&<AIpanel card={card}/>}
+        {page==="secenje"&&<AIsecenjeOptimizer card={card} inp={inp} lbl={lbl} msg={msg}/>}
         {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
         {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
 
