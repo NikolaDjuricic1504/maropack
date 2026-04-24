@@ -358,8 +358,8 @@ function KalkulatorFolije({user,db,setDb,setPage,msg,inp,card,lbl}) {
     var ik=+sir;
     var nalogData={
       datumIsp:"",sk:+sk,
-      mats:vm.map(function(m){return Object.assign({},m);}),
-      sir:+sir, ik:ik, nal:+nal, met:+met,
+      mats:vm.map(function(m){return {tip:m.tip,deb:m.deb};}),
+      sir:+sir, ik:ik,
       grafika:"Nov posao", stm:"Flexo", brBoja:"4", smer:"Desno",
       obimValjka:"", hilzna:"76",
       tipPerf:"", oblikPerf:"Fina (mikro)", razmakPerf:"", brzinaPerf:"120",
@@ -368,7 +368,7 @@ function KalkulatorFolije({user,db,setDb,setPage,msg,inp,card,lbl}) {
       korona:"Ne", obelezavanje:"Crvena traka",
       pakovanjeRolni:"Svaka pojedinacno", paleta:"Euro paleta",
       tipLepka:"PU solventni", lepakOdnos:"3:1", lepakNanos:"3,5",
-      rezFormati:[], res:res,
+      rezFormati:[],
     };
     var NAZIVI={mat:"Nalog za materijal",stm:"Nalog za stampu",kas:"Nalog za kasiranje",rez:"Nalog za rezanje"};
     var inserts=Object.keys(NAZIVI).map(function(k){
@@ -442,8 +442,7 @@ function KalkulatorFolije({user,db,setDb,setPage,msg,inp,card,lbl}) {
 
   async function sacuvaj(){
     if(!res||!naziv.trim()){msg("Unesite naziv proizvoda!","err");return;}
-    var ik2=mats.length>0?+sir:+sir;
-    var p={naziv:naziv,kupac:kupacKalk,sir:sir,ik:ik2,met:met,nal:nal,sk:sk,mar:mar,mats:mats.slice(),res:Object.assign({},res),datum:dnow(),ko:user.ime,tip:"folija"};
+    var p={naziv:naziv,kupac:kupacKalk,sir:sir,met:met,nal:nal,sk:sk,mar:mar,mats:mats.slice(),res:Object.assign({},res),datum:dnow(),ko:user.ime,tip:"folija"};
     try{const {error}=await supabase.from('proizvodi').insert([p]);if(error)throw error;msg("Proizvod sacuvan!");}
     catch(e){msg("Greska: "+e.message,"err");}
   }
@@ -1116,12 +1115,8 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
                         </div>
                       )}
                       <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
-                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){
-                          if(p.tip==="kesa") setPage("kalk_kesa");
-                          else if(p.tip==="spulna") setPage("kalk_spulna");
-                          else setPage("kalk_folija");
-                        }}>📋 Otvori kalk.</button>
-                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#059669",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("novi_nalog");}}>⚡ Kreiraj nalog</button>
+                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("kalk_folija");}}>📋 Otvori</button>
+                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#059669",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("novi_nalog");}}>⚡ Nalog</button>
                       </div>
                     </div>
                   );
