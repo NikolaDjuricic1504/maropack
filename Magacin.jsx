@@ -286,9 +286,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
     }
 
     // Strategija: trazi blokove koji imaju Pallet i Gross wt
-    // Svaka rolna ima: [Description LOT] [Rolls] [Lmt each] ... [Width] 
- Gross wt... 
- Pallet...
+    // Svaka rolna ima: [Description LOT] [Rolls] [Lmt each] ... [Width] Gross wt... Pallet...
     
     // Razdvoji po "Pallet" — svaki blok je jedna rolna
     var blocks = text.split(/Pallet\s*:/i);
