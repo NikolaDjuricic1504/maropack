@@ -399,9 +399,14 @@ export default function Magacin({msg, inp, card, lbl, user}) {
       while((mm=rx.exec(zone)) !== null) {
         var v = parseInt(mm[1])*1000 + parseInt(mm[2]);
         // Metraza je > 500m i nije kg
-        if(v > 500 && v !== kg_neto && v !== kg_bruto) itNums.push(v);
+        // Preskoci sirinu i kg vrednosti
+        if(v === sirina) continue;
+        if(kg_neto && Math.abs(v-kg_neto) < 5) continue;
+        if(kg_bruto && Math.abs(v-kg_bruto) < 5) continue;
+        if(v >= 500 && v <= 200000) itNums.push(v);
       }
-      if(itNums.length > 0) metraza = Math.min.apply(null, itNums); // najmanja vrednost je metraza/rolni
+      // VAZNO: uzimamo PRVU vrednost, ne min() - min() bira sirinu (1440) umesto metraze (12258)!
+      if(itNums.length > 0) metraza = itNums[0];
 
       // 2. Ako ne, trazi 5-cifreni broj
       if(!metraza) {
