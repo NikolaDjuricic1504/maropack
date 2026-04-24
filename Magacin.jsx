@@ -248,104 +248,122 @@ export default function Magacin({msg, inp, card, lbl, user}) {
     }
   }
 
-  // Lokalni parser teksta iz packing liste
+  // Lokalni parser teksta iz packing liste (Rossella format)
   function parsePdfTextLocally(text, dob, dat) {
     var rolne = [];
-    var lines = text.split(/\n|\r/);
-    var currentRolna = null;
-
-    // Extract supplier
+    // PDF.js vraca tokene odvojeno - spajamo ih u jedan string
+    // i trazimo poznate patterne
     var dobavljac = dob || "";
     if(!dobavljac) {
-      var supMatch = text.match(/(Rossella|Taghleef|Treofan|Jindal|UFlex|Kopafilm|Manucor)/i);
-      if(supMatch) dobavljac = supMatch[0];
+      var sm = text.match(/(Rossella|Taghleef|Treofan|Jindal|UFlex|Kopafilm)/i);
+      if(sm) dobavljac = sm[0];
+    }
+    var datum = dat || new Date().toLocaleDateString("sr-RS");
+
+    // Tip materijala - prepoznaj iz teksta
+    function getTip(chunk) {
+      if(/CLAY COATED.*055g|CC WHITE.*055/i.test(chunk)) return "CC White 55g";
+      if(/CLAY COATED.*060g|CC WHITE.*060/i.test(chunk)) return "CC White 60g";
+      if(/CLAY COATED.*070g/i.test(chunk)) return "CC White 70g";
+      if(/CLAY COATED.*080g/i.test(chunk)) return "CC White 80g";
+      if(/CLAY COATED/i.test(chunk)) {
+        var gm = chunk.match(/(\d{2,3})g/i);
+        return "CC White " + (gm ? gm[1]+"g" : "");
+      }
+      if(/BOPP SEDEF/i.test(chunk)) return "BOPP SEDEF";
+      if(/BOPP/i.test(chunk)) return "BOPP";
+      if(/OPP/i.test(chunk)) return "OPP";
+      if(/FXPU/i.test(chunk)) return "FXPU";
+      if(/FXCB/i.test(chunk)) return "FXCB";
+      if(/FXC/i.test(chunk)) return "FXC";
+      if(/PET/i.test(chunk)) return "PET";
+      if(/CPP/i.test(chunk)) return "CPP";
+      if(/LDPE|LLDPE/i.test(chunk)) return "LDPE";
+      if(/PA\/PE/i.test(chunk)) return "PA/PE";
+      if(/PAPIR|PAPER|SILICON/i.test(chunk)) return "Papir silikonizani";
+      if(/ALU/i.test(chunk)) return "ALU";
+      return "";
     }
 
-    for(var i=0; i<lines.length; i++) {
-      var line = lines[i].trim();
-      if(!line || line.length < 3) continue;
-
-      // Skip header lines
-      if(/^(Page|Description|Shipping|Customer|Summary|MAROPACK|NOVOSADSKA|RAKOVAC|SERBIA|Package|Wooden|Total:|Pallets no\.|Via IV)/i.test(line)) continue;
-
-      // Gross/Net weight line — završi trenutnu rolnu
-      if(/Gross wt/i.test(line)) {
-        if(currentRolna) {
-          var gm = line.match(/Gross wt\.?\s*Kg[:\s]*([\d.,]+)/i);
-          var nm = line.match(/Net wt\.?\s*Kg[:\s]*([\d.,]+)/i);
-          if(gm) currentRolna.kg_bruto = parseFloat(gm[1].replace(",",""));
-          if(nm) currentRolna.kg_neto = parseFloat(nm[1].replace(",",""));
-          rolne.push(Object.assign({}, currentRolna));
-          currentRolna = null;
-        }
-        continue;
-      }
-
-      // Pallet line — uzmi Sch i Pallet broj
-      if(/Pallet/i.test(line)) {
-        if(currentRolna) {
-          var schM = line.match(/Sch\.?[:\s]*([\w/]+)/i);
-          var palM = line.match(/Pallet[:\s]*(\d+)/i);
-          if(schM) currentRolna.sch = schM[1].trim();
-          if(palM) currentRolna.palet = palM[1];
-        }
-        continue;
-      }
-
-      // Prepoznaj tip materijala
-      var tip = "";
-      var upper = line.toUpperCase();
-      if(/CLAY COATED|CC WHITE/i.test(line)) {
-        var gMatch = line.match(/0?(\d{2,3})\s*g/i);
-        tip = "CC White " + (gMatch ? gMatch[1]+"g" : "");
-      } else if(/FXPU/i.test(line)) tip = "FXPU";
-      else if(/FXCB/i.test(line)) tip = "FXCB";
-      else if(/FXC/i.test(line)) tip = "FXC";
-      else if(/BOPP SEDEF/i.test(line)) tip = "BOPP SEDEF";
-      else if(/BOPP/i.test(line)) tip = "BOPP";
-      else if(/OPP/i.test(line)) tip = "OPP";
-      else if(/PET/i.test(line)) tip = "PET";
-      else if(/CPP/i.test(line)) tip = "CPP";
-      else if(/LDPE|LLDPE/i.test(line)) tip = "LDPE";
-      else if(/PAPIR|PAPER|SILICONIZ/i.test(line)) tip = "Papir";
-      else if(/ALU|ALUM/i.test(line)) tip = "ALU";
-
-      if(!tip) continue;
-
-      // Izvuci širinu (3-4 cifre + mm)
-      var wMatch = line.match(/(\d{3,4})\s*mm/i);
-      if(!wMatch) continue;
-      var sirina = parseInt(wMatch[1]);
-      if(sirina < 50 || sirina > 3000) continue;
-
-      // Izvuci metrazu (broj sa tačkom kao separator hiljada npr 12.258 ili 12,258)
-      var metMatch = line.match(/(\d{1,2}[.,]\d{3}(?:[.,]\d+)?)/);
-      var metraza = metMatch ? parseFloat(metMatch[1].replace(/\./g,"").replace(",",".")) : 0;
-      if(metraza < 100) continue;
-
-      // Izvuci LOT
-      var lotM = line.match(/([A-Z]\d{2}\/\d{4,6})/);
+    // Strategija: trazi blokove koji imaju Pallet i Gross wt
+    // Svaka rolna ima: [Description LOT] [Rolls] [Lmt each] ... [Width] 
+ Gross wt... 
+ Pallet...
+    
+    // Razdvoji po "Pallet" — svaki blok je jedna rolna
+    var blocks = text.split(/Pallet\s*:/i);
+    
+    for(var i=1; i<blocks.length; i++) {
+      var block = blocks[i];
+      var prevBlock = blocks[i-1];
+      
+      // Iz prethodnog bloka izvuci tip, LOT, metrazu
+      // Trazi LOT pattern: U26/00064
+      var lotM = prevBlock.match(/([A-Z]\d{2}\/\d{4,6})/);
       var lot = lotM ? lotM[1] : "";
-
-      if(currentRolna) rolne.push(Object.assign({}, currentRolna));
-
-      currentRolna = {
+      
+      // Trazi metrazu: broj tipa "12.258" ili "12258" 
+      // U Rossella PDF: "12.258" je metraza po rolni (Lmt each)
+      var metM = prevBlock.match(/(\d{1,2}[.,]\d{3})(?!\s*,\d)/);
+      if(!metM) metM = prevBlock.match(/(\d{4,6})/);
+      var metraza = 0;
+      if(metM) {
+        var ms = metM[1].replace(".","").replace(",",".");
+        metraza = parseFloat(ms);
+        if(metraza > 100000) metraza = metraza / 10; // fix ako je u dm
+      }
+      
+      // Tip materijala iz prethodnog bloka
+      var tip = getTip(prevBlock);
+      if(!tip) continue;
+      
+      // Sirina iz opisa: "1440mm" ili "1.440" u kolonama
+      var sirM = prevBlock.match(/(\d{3,4})\s*mm/i) || prevBlock.match(/1[.,]440/) || prevBlock.match(/(\d{3,4})\s*$/m);
+      var sirina = 1440; // default za Rossella
+      if(sirM) {
+        var sv = sirM[1] || sirM[0];
+        sv = sv.replace(",","").replace(".","");
+        var si = parseInt(sv);
+        if(si >= 100 && si <= 3000) sirina = si;
+      }
+      
+      // Iz trenutnog bloka (posle "Pallet :") izvuci broj paleta i Sch
+      var palM = block.match(/^\s*(\d{5,8})/);
+      var palet = palM ? palM[1] : "";
+      
+      var schM = block.match(/Sch\.?\s*:?\s*([\d\/]+)/i);
+      var sch = schM ? schM[1].trim() : "";
+      
+      // Gross / Net weight
+      var grossM = block.match(/Gross wt\.?\s*Kg\s*:\s*([\d.,]+)/i) || 
+                   prevBlock.match(/Gross wt\.?\s*Kg\s*:\s*([\d.,]+)/i);
+      var netM = block.match(/Net wt\.?\s*Kg\s*:\s*([\d.,]+)/i) || 
+                 prevBlock.match(/Net wt\.?\s*Kg\s*:\s*([\d.,]+)/i);
+      
+      var kg_bruto = grossM ? parseFloat(grossM[1].replace(".","").replace(",",".")) : 0;
+      var kg_neto = netM ? parseFloat(netM[1].replace(".","").replace(",",".")) : 0;
+      
+      // Validacija
+      if(metraza < 100 || metraza > 100000) continue;
+      if(sirina < 50 || sirina > 5000) continue;
+      
+      rolne.push({
         tip: tip,
         sirina: sirina,
         metraza: metraza,
         metraza_ost: metraza,
         lot: lot,
         dobavljac: dobavljac,
-        datum: dat || new Date().toLocaleDateString("sr-RS"),
-        sch: "",
-        palet: "",
-        kg_bruto: 0,
-        kg_neto: 0,
-        napomena: line.substring(0, 80).trim(),
+        datum: datum,
+        sch: sch,
+        palet: palet,
+        kg_bruto: kg_bruto,
+        kg_neto: kg_neto,
+        napomena: tip+" "+sirina+"mm LOT:"+lot,
         status: "Na stanju"
-      };
+      });
     }
-    if(currentRolna) rolne.push(currentRolna);
+    
     return rolne;
   }
 
