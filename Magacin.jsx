@@ -340,157 +340,58 @@ export default function Magacin({msg, inp, card, lbl, user}) {
     }
   }
 
-  // Pametan univerzalni parser - radi za razlicite formate i velicine rolni
+  // Parser za PDF packing liste (Rossella i slicni formati)
+  // PDF.js vraca kolone s desna na levo, pa je redosled u tekstu:
+  // [sirina] [ukupno_m2] [ukupno_m] [metraza_po_rolni] [LOT] [opis] [rolls] [kg_bruto] [kg_neto] Gross/Net...
   function parsePdfTextLocally(text, dob, dat) {
     var rolne = [];
     var dobavljac = dob || "";
     if(!dobavljac) {
-      var sm = text.match(/(Rossella|Taghleef|Treofan|Jindal|UFlex|Kopafilm|Manucor|Poligal)/i);
+      var sm = text.match(/(Rossella|Taghleef|Treofan|Jindal|UFlex|Kopafilm|Manucor)/i);
       if(sm) dobavljac = sm[0];
     }
     var datum = dat || new Date().toLocaleDateString("sr-RS");
 
-    // PDF.js cesto razdvaja "12.258" na tokene "12" i ".258" koji se spoje sa razmakom
-    // Pre parsiranja spoji nazad: "12 .258" -> "12.258", "1 .017" -> "1.017"
-    text = text.replace(/(\d)\s+\.(\d{3})\b/g, "$1.$2");
-
-    // Italian number format: 12.258 = 12258, 1.017 = 1017
+    // Italian format: 12.258 = 12258, 1.017 = 1017
     function parseIt(s) {
-      s = String(s||"").trim();
-      if(s.indexOf(",") !== -1) s = s.substring(0, s.indexOf(","));
+      s = String(s||"").trim().split(",")[0];
       var m = s.match(/^(\d{1,3})\.(\d{3})$/);
       if(m) return parseInt(m[1])*1000 + parseInt(m[2]);
       return parseFloat(s.replace(/\./g,"").replace(",",".")) || 0;
     }
 
-    // Gustoca materijala za izracun koeficijenta
-    var GUSTOCA = {
-      "BOPP":0.905,"OPP":0.905,"CPP":0.905,"PET":1.38,"PA":1.14,
-      "LDPE":0.92,"PE":0.92,"HDPE":0.96,"ALU":2.70,
-      "FXC":0.92,"FXPU":0.92,"FXCB":0.92,"HSD":0.91
-    };
-
-    // kg/m za datu rolnu (koeficijent za izracun)
-    function koefKgM(tip, deb, gsm, sirina) {
-      if(gsm > 0) return gsm * sirina / 1e6;
-      var t = tip.toUpperCase().split(" ")[0];
-      var g = GUSTOCA[t] || 0.91;
-      if(deb) return deb * g * sirina / 1e6;
-      return 0;
-    }
-
-    // Prepoznaj tip materijala
-    function getTipObj(chunk) {
-      if(/CLAY COATED.*055g|CC WHITE.*055/i.test(chunk)) return {tip:"CC White 55g",deb:0,gsm:55};
-      if(/CLAY COATED.*060g|CC WHITE.*060/i.test(chunk)) return {tip:"CC White 60g",deb:0,gsm:60};
-      if(/CLAY COATED.*070g/i.test(chunk)) return {tip:"CC White 70g",deb:0,gsm:70};
-      if(/CLAY COATED.*080g/i.test(chunk)) return {tip:"CC White 80g",deb:0,gsm:80};
-      if(/CLAY COATED.*090g/i.test(chunk)) return {tip:"CC White 90g",deb:0,gsm:90};
+    // Prepoznaj tip i gsm
+    function getTipGsm(chunk) {
+      if(/055g/i.test(chunk)) return {tip:"CC White 55g",deb:0,gsm:55};
+      if(/060g/i.test(chunk)) return {tip:"CC White 60g",deb:0,gsm:60};
+      if(/070g/i.test(chunk)) return {tip:"CC White 70g",deb:0,gsm:70};
+      if(/080g/i.test(chunk)) return {tip:"CC White 80g",deb:0,gsm:80};
       if(/CLAY COATED/i.test(chunk)) {
         var gm=chunk.match(/0(\d{2})g/i);
         return {tip:"CC White "+(gm?gm[1]+"g":""),deb:0,gsm:gm?parseInt(gm[1]):60};
       }
-      if(/BOPP SEDEF/i.test(chunk)) return {tip:"BOPP SEDEF",deb:20,gsm:0};
-      if(/BOPP/i.test(chunk)) {
-        var dm=chunk.match(/(\d{2})\s*mic/i); var d=dm?parseInt(dm[1]):20;
-        return {tip:"BOPP",deb:d,gsm:0};
-      }
       if(/FXPU/i.test(chunk)) return {tip:"FXPU",deb:29,gsm:0};
       if(/FXCB/i.test(chunk)) return {tip:"FXCB",deb:30,gsm:0};
-      if(/FXC/i.test(chunk)) return {tip:"FXC",deb:30,gsm:0};
-      if(/OPP/i.test(chunk)) {
-        var dm=chunk.match(/(\d{2})\s*mic/i); var d=dm?parseInt(dm[1]):30;
-        return {tip:"OPP",deb:d,gsm:0};
-      }
-      if(/PET/i.test(chunk)) return {tip:"PET",deb:12,gsm:0};
-      if(/CPP/i.test(chunk)) return {tip:"CPP",deb:20,gsm:0};
+      if(/FXC/i.test(chunk))  return {tip:"FXC",deb:30,gsm:0};
+      if(/BOPP SEDEF/i.test(chunk)) return {tip:"BOPP SEDEF",deb:20,gsm:0};
+      if(/BOPP/i.test(chunk)) return {tip:"BOPP",deb:20,gsm:0};
+      if(/OPP/i.test(chunk))  return {tip:"OPP",deb:30,gsm:0};
+      if(/PET/i.test(chunk))  return {tip:"PET",deb:12,gsm:0};
+      if(/CPP/i.test(chunk))  return {tip:"CPP",deb:20,gsm:0};
       if(/LDPE|LLDPE/i.test(chunk)) return {tip:"LDPE",deb:40,gsm:0};
       if(/PA.?PE/i.test(chunk)) return {tip:"PA/PE",deb:15,gsm:0};
       if(/PAPIR|PAPER|SILICON/i.test(chunk)) return {tip:"Papir silikonizani",deb:0,gsm:65};
-      if(/ALU/i.test(chunk)) return {tip:"ALU",deb:9,gsm:0};
+      if(/ALU/i.test(chunk))  return {tip:"ALU",deb:9,gsm:0};
       return null;
     }
 
-    // Pametan izracun metaze i kg iz bloka
-    function smartParseNums(block, tipObj, sirina) {
-      // Eksplicitni Gross/Net iz bloka
-      var grossM = block.match(/Gross wt\.?\s*Kg\s*:\s*([\d.,]+)/i);
-      var netM = block.match(/Net wt\.?\s*Kg\s*:\s*([\d.,]+)/i);
-      var kg_bruto = grossM ? parseIt(grossM[1]) : 0;
-      var kg_neto = netM ? parseIt(netM[1]) : 0;
-
-      // Trazi metrazu - Italian DD.DDD format bez decimala
-      // Zona pretrage: posle opisa materijala
-      var descEnd = block.search(/GN|stampata|Non|LOT/i);
-      var zone = descEnd > 0 ? block.substring(descEnd) : block;
-      var metraza = 0;
-
-      // 1. Trazimo DD.DDD pattern (Italian hiljadice)
-      var itNums = [];
-      var rx = /(\d{1,3})\.(\d{3})(?![.,]\d)/g;
-      var mm;
-      while((mm=rx.exec(zone)) !== null) {
-        var v = parseInt(mm[1])*1000 + parseInt(mm[2]);
-        // Metraza je > 500m i nije kg
-        // Preskoci sirinu i kg vrednosti
-        if(v === sirina) continue;
-        if(kg_neto && Math.abs(v-kg_neto) < 5) continue;
-        if(kg_bruto && Math.abs(v-kg_bruto) < 5) continue;
-        if(v >= 500 && v <= 200000) itNums.push(v);
-      }
-      // VAZNO: uzimamo PRVU vrednost, ne min() - min() bira sirinu (1440) umesto metraze (12258)!
-      if(itNums.length > 0) metraza = itNums[0];
-
-      // 2. Ako ne, trazi 5-cifreni broj
-      if(!metraza) {
-        var m5 = zone.match(/(\d{5,6})/);
-        if(m5) { var v=parseInt(m5[1]); if(v>500&&v<500000) metraza=v; }
-      }
-
-      // Koeficijent kg/m
-      var k = koefKgM(tipObj.tip, tipObj.deb, tipObj.gsm, sirina);
-
-      // Ako nema metraze ali ima kg -> izracunaj po koeficijentu
-      if(!metraza && kg_neto > 0 && k > 0) {
-        metraza = Math.round(kg_neto / k);
-      }
-
-      // Ako nema kg ali ima metrazu -> izracunaj po koeficijentu
-      if((!kg_neto || kg_neto < 10) && metraza > 0 && k > 0) {
-        kg_neto = Math.round(metraza * k * 10) / 10;
-        kg_bruto = Math.round(kg_neto * 1.025 * 10) / 10;
-      }
-
-      // Ako ni jedno ni drugo - procena iz sirine i prosecne metraze
-      if(!metraza) metraza = 0;
-
-      return {metraza:metraza, kg_bruto:kg_bruto, kg_neto:kg_neto};
-    }
-
-    // Sirina: Italian "1.440" ili "NNNmm" ili broj 100-5000
-    function parseSirina(block) {
-      // Italian format 1.440 = 1440
-      var itSir = block.match(/([1-9])\.(\d{3})(?=\s*$|\s*[^.0-9])/);
-      if(itSir) {
-        var v = parseInt(itSir[1])*1000 + parseInt(itSir[2]);
-        if(v >= 100 && v <= 5000) return v;
-      }
-      // mm format
-      var mmSir = block.match(/(\d{3,4})\s*mm/i);
-      if(mmSir) { var v=parseInt(mmSir[1]); if(v>=100&&v<=5000) return v; }
-      // Broj na kraju bloka
-      var endNum = block.match(/(\d{3,4})\s*$/);
-      if(endNum) { var v=parseInt(endNum[1]); if(v>=100&&v<=5000) return v; }
-      return 1440; // default
-    }
-
-    // Razdvoji po "Pallet :" - svaki blok = jedna rolna
+    // Split po "Pallet :" - svaki blok sadrzi podatke za jednu rolnu
     var blocks = text.split(/Pallet\s*:/i);
 
     for(var i=1; i<blocks.length; i++) {
       var block = blocks[i];
 
-      // Pallet
+      // Palet broj
       var palM = block.match(/^\s*(\d{5,8})/);
       var palet = palM ? palM[1] : "";
 
@@ -498,61 +399,71 @@ export default function Magacin({msg, inp, card, lbl, user}) {
       var schM = block.match(/Sch\.?\s*:?\s*(\d{3,6}\/\d{1,3})/i);
       var sch = schM ? schM[1] : "";
 
-      // Tip
-      var tipObj = getTipObj(block);
-      if(!tipObj) continue;
-
-      // LOT
-      var lotM = block.match(/([A-Z]\d{2}\/\d{4,6})/);
+      // LOT - format U26/00064
+      var lotM = block.match(/\b([A-Z]\d{2}\/\d{5,6})\b/);
       var lot = lotM ? lotM[1] : "";
 
-      // Sirina
-      var sirina = parseSirina(block);
+      // Tip materijala
+      var tipObj = getTipGsm(block);
+      if(!tipObj) continue;
 
-      // Metraza i kg - pametan izracun
-      var nums = smartParseNums(block, tipObj, sirina);
-      if(!nums.metraza) continue;
+      // Sirina: 1.440 = 1440 (Italian), ili NNNmm
+      var sirina = 1440;
+      var sirM = block.match(/\b1[.,]440\b/);
+      if(!sirM) {
+        var sirM2 = block.match(/\b(\d{3,4})\s*mm\b/i);
+        if(sirM2) { var si=parseInt(sirM2[1]); if(si>=100&&si<=5000) sirina=si; }
+      }
 
-      rolne.push({
-        tip: tipObj.tip,
-        deb: tipObj.deb || 0,
-        sirina: sirina,
-        metraza: nums.metraza,
-        metraza_ost: nums.metraza,
-        lot: lot,
-        dobavljac: dobavljac,
-        datum: datum,
-        sch: sch,
-        palet: palet,
-        kg_bruto: nums.kg_bruto,
-        kg_neto: nums.kg_neto,
-        napomena: tipObj.tip+" "+sirina+"mm"+(lot?" LOT:"+lot:""),
-        status: "Na stanju"
-      });
-    }
+      // Metraza: DD.DDD BEZ zareza, PRE LOT-a, nije sirina
+      // PDF.js vraca: "1.440 17.652,00 12.258,0 12.258 U26/00064 CLAY..."
+      // Metraza je poslednji DD.DDD pre LOT-a koji nije sirina
+      var lotPos = lot ? block.indexOf(lot) : block.search(/CLAY|BOPP|OPP|PET|CPP|ALU/i);
+      var preDesc = lotPos > 5 ? block.substring(0, lotPos) : block;
+      var metCands = [];
+      var rxMet = /\b(\d{2})\.(\d{3})\b(?!,)/g;
+      var mm;
+      while((mm=rxMet.exec(preDesc))!==null) {
+        var v=parseInt(mm[1])*1000+parseInt(mm[2]);
+        if(v!==sirina && v>=1000 && v<=99999) metCands.push(v);
+      }
+      // Uzimamo poslednji kandidat pre LOT-a (to je metraza/rolni, ne ukupno)
+      var metraza = metCands.length>0 ? metCands[metCands.length-1] : 0;
 
-    // Ako nema blokova sa Pallet, probaj linijski parsing
-    if(rolne.length === 0) {
-      var lines = text.split(/[\n\r]+/);
-      var currentTip = null;
-      for(var j=0; j<lines.length; j++) {
-        var line = lines[j];
-        var to = getTipObj(line);
-        if(to) { currentTip = to; continue; }
-        if(!currentTip) continue;
-        var sirina2 = parseSirina(line);
-        var nums2 = smartParseNums(line, currentTip, sirina2);
-        if(nums2.metraza > 500) {
-          rolne.push({
-            tip:currentTip.tip, deb:currentTip.deb||0, sirina:sirina2,
-            metraza:nums2.metraza, metraza_ost:nums2.metraza,
-            lot:"", dobavljac:dobavljac, datum:datum, sch:"", palet:"",
-            kg_bruto:nums2.kg_bruto, kg_neto:nums2.kg_neto,
-            napomena:currentTip.tip+" "+sirina2+"mm", status:"Na stanju"
-          });
-          currentTip = null;
+      // Gross/Net: "1.017   994 Gross wt. Kg:   Net wt. Kg:"
+      // kg_bruto dolazi neposredno pre "Gross wt.", kg_neto pre "Net wt."
+      var gwM = block.match(/([\d.,]+)\s+Gross wt\.?\s*Kg\s*:/i);
+      var nwM = block.match(/([\d.,]+)\s+Net wt\.?\s*Kg\s*:/i);
+      var kg_bruto = gwM ? parseIt(gwM[1]) : 0;
+      var kg_neto  = nwM ? parseIt(nwM[1]) : 0;
+
+      // Auto-izracun kg po koeficijentu ako nema iz PDF-a
+      if((!kg_neto||kg_neto<10) && metraza>0) {
+        var k = tipObj.gsm>0 ? tipObj.gsm*sirina/1e6 : tipObj.deb*0.91*sirina/1e6;
+        if(k>0) {
+          kg_neto  = Math.round(metraza*k*10)/10;
+          kg_bruto = Math.round(kg_neto*1.025*10)/10;
         }
       }
+
+      if(!metraza) continue;
+
+      rolne.push({
+        tip:      tipObj.tip,
+        deb:      tipObj.deb||0,
+        sirina:   sirina,
+        metraza:  metraza,
+        metraza_ost: metraza,
+        lot:      lot,
+        dobavljac: dobavljac,
+        datum:    datum,
+        sch:      sch,
+        palet:    palet,
+        kg_bruto: kg_bruto,
+        kg_neto:  kg_neto,
+        napomena: tipObj.tip+" "+sirina+"mm"+(lot?" LOT:"+lot:""),
+        status:   "Na stanju"
+      });
     }
 
     return rolne;
