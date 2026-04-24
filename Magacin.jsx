@@ -287,7 +287,24 @@ export default function Magacin({msg, inp, card, lbl, user}) {
           for(var i=1; i<=pdf.numPages; i++) {
             var page = await pdf.getPage(i);
             var content = await page.getTextContent();
-            var pageText = content.items.map(function(item){ return item.str; }).join(" ");
+            var items = content.items;
+            var pageText = "";
+            // Pametno spajanje: ako prethodni item nema EOL i sledeci pocinje cifrom ili tackom,
+            // ne dodajemo razmak (sprecava split "12" " .258" -> "12.258")
+            for(var j=0; j<items.length; j++) {
+              var str = items[j].str;
+              if(j === 0) { pageText += str; continue; }
+              var prev = pageText.slice(-1);
+              var next = str.charAt(0);
+              // Ako prethodni zavrsava cifrom i sledeci pocinje tackom+ciframa -> spoji bez razmaka
+              if(/\d/.test(prev) && /^[.,]\d/.test(str.trimLeft())) {
+                pageText += str;
+              } else if(/[.,]\d/.test(prev.slice(-3)) && /^\d/.test(next)) {
+                pageText += str;
+              } else {
+                pageText += " " + str;
+              }
+            }
             fullText += pageText + "\n";
           }
 
