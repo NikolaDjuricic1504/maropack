@@ -309,12 +309,24 @@ export default function Magacin({msg, inp, card, lbl, user}) {
           }
 
           // Parse the extracted text
+          // DEBUG: prikazi prvih 500 chars da vidimo sta PDF.js vraca
+          console.log("=== PDF.js raw text (first 1000 chars) ===");
+          console.log(JSON.stringify(fullText.substring(0, 1000)));
+          // Nadji prvi blok posle "Pallet :"
+          var debugBlocks = fullText.split(/Pallet\s*:/i);
+          if(debugBlocks.length > 1) {
+            console.log("=== Block 1 (after Pallet:) ===");
+            console.log(JSON.stringify(debugBlocks[1].substring(0, 300)));
+          }
+
           var rolne = parsePdfTextLocally(fullText, dobavljacImport, datumImport);
           if(rolne.length > 0) {
             setParsedRolne(rolne);
             msg("Parsirano "+rolne.length+" rolni iz PDF!");
           } else {
-            msg("Nema rolni pronađenih u PDF. Pokušaj ručni unos.", "err");
+            // Debug: show what text we got
+            var preview = fullText.substring(0, 200).replace(/\n/g, " ");
+            msg("Nema rolni. Raw tekst: "+preview, "err");
           }
         } catch(err) {
           msg("Greška pri čitanju PDF: "+err.message, "err");
