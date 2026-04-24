@@ -1028,18 +1028,105 @@ function PonudePage({db,setDb,card,inp,lbl,eu,msg,user,pregPonuda,setPregPonuda,
 }
 
 // ===================== BAZA PROIZVODA =====================
-function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) {
+function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB,user,setKalkIzBaze}) {
   var [filterKupac,setFilterKupac]=useState("");
   var [filterTip,setFilterTip]=useState("");
   var [pretraga,setPretraga]=useState("");
+  var [sort,setSort]=useState("datum");
 
-  var kupci=[...new Set(db.proizvodi.map(function(p){return p.kupac;}).filter(Boolean))].sort();
+  var svi = db.proizvodi || [];
+  var kupci=[...new Set(svi.map(function(p){return p.kupac;}).filter(Boolean))].sort();
 
-  var filtrirani=db.proizvodi.filter(function(p){
+  var filtrirani = svi.filter(function(p){
     return (!filterKupac||p.kupac===filterKupac)&&
            (!filterTip||p.tip===filterTip)&&
-           (!pretraga||(p.naziv||"").toLowerCase().includes(pretraga.toLowerCase()));
+           (!pretraga||(p.naziv||"").toLowerCase().includes(pretraga.toLowerCase())||(p.kupac||"").toLowerCase().includes(pretraga.toLowerCase()));
   });
+
+  filtrirani.sort(function(a,b){
+    if(sort==="naziv") return (a.naziv||"").localeCompare(b.naziv||"");
+    if(sort==="kupac") return (a.kupac||"").localeCompare(b.kupac||"");
+    if(sort==="tip") return (a.tip||"").localeCompare(b.tip||"");
+    return (b.id||0) - (a.id||0);
+  });
+
+  var poTipu = {
+    folija: filtrirani.filter(function(p){return p.tip==="folija";}),
+    kesa:   filtrirani.filter(function(p){return p.tip==="kesa";}),
+    spulna: filtrirani.filter(function(p){return p.tip==="spulna";}),
+  };
+
+  var BOJE2=["#1d4ed8","#7c3aed","#0891b2","#059669"];
+  var SLOJ2=["A","B","C","D"];
+
+  async function obrisiProizvod(id,naziv) {
+    if(!confirm("Obrisati proizvod '"+naziv+"'?")) return;
+    try {
+      var r = await supabase.from("proizvodi").delete().eq("id",id);
+      if(r.error) throw r.error;
+      setDb(function(d){return Object.assign({},d,{proizvodi:d.proizvodi.filter(function(p){return p.id!==id;})});});
+      msg("Obrisano!");
+    } catch(e){ msg("Greska: "+e.message,"err"); }
+  }
+
+  function otvoriUKalkulatoru(p) {
+    if(setKalkIzBaze) setKalkIzBaze(p);
+    if(p.tip==="kesa") setPage("kalk_kesa");
+    else if(p.tip==="spulna") setPage("kalk_spulna");
+    else setPage("kalk_folija");
+  }
+
+  function kreirajNalog(p) {
+    if(setKalkIzBaze) setKalkIzBaze(p);
+    setPage("novi_nalog");
+  }
+
+  function renderProizvod(p, pi, total) {
+    var mats=(p.mats||[]).filter(function(m){return m.tip;});
+    var boja = TIP_BOJA[p.tip]||"#64748b";
+    var ikona = p.tip==="folija"?"🧮":p.tip==="kesa"?"🛍️":p.tip==="spulna"?"🔄":"📦";
+
+    var dimInfo = "";
+    if(p.tip==="folija" && p.sir) dimInfo = "📏 "+p.sir+"mm";
+    else if(p.tip==="kesa" && p.sirina_kese) dimInfo = "📐 "+p.sirina_kese+"x"+(p.duzina_kese||"?")+(p.klapna?"+"+p.klapna:"")+"mm";
+    else if(p.tip==="spulna" && p.W) dimInfo = "🔧 W="+p.W+"mm D="+(p.D_mm||"?")+"mm";
+
+    return (
+      <div key={p.id} style={{padding:"14px 16px",borderBottom:pi<total-1?"1px solid #f1f5f9":"none",display:"flex",gap:14,alignItems:"flex-start"}}>
+        <span style={{background:boja+"20",color:boja,borderRadius:6,padding:"3px 10px",fontWeight:700,fontSize:10,flexShrink:0,marginTop:2,whiteSpace:"nowrap"}}>
+          {ikona} {TIP_LAB[p.tip]||"—"}
+        </span>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:800,fontSize:14,marginBottom:4}}>{p.naziv}</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {mats.map(function(m,i){
+              return(
+                <span key={i} style={{fontSize:11,background:BOJE2[i]+"15",color:BOJE2[i],borderRadius:5,padding:"2px 7px",fontWeight:700}}>
+                  {SLOJ2[i]}: {m.tip} {m.deb}µ
+                </span>
+              );
+            })}
+            {dimInfo && <span style={{fontSize:11,color:"#64748b",padding:"2px 7px",background:"#f1f5f9",borderRadius:5}}>{dimInfo}</span>}
+            {p.ik && <span style={{fontSize:11,color:"#059669",padding:"2px 7px",background:"#f0fdf4",borderRadius:5,fontWeight:600}}>idealna: {p.ik}mm</span>}
+          </div>
+          {p.nap && <div style={{fontSize:11,color:"#64748b",marginTop:4,fontStyle:"italic"}}>📝 {p.nap}</div>}
+        </div>
+        {p.res && p.res.k1 && (
+          <div style={{textAlign:"right",flexShrink:0}}>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>Cena/1000m</div>
+            <div style={{fontSize:18,fontWeight:800,color:"#1d4ed8"}}>{eu(p.res.k1)}</div>
+          </div>
+        )}
+        <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0,minWidth:110}}>
+          <button style={{padding:"6px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}} onClick={function(){otvoriUKalkulatoru(p);}}>📋 Otvori</button>
+          <button style={{padding:"6px 12px",borderRadius:6,border:"none",background:"#059669",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}} onClick={function(){kreirajNalog(p);}}>⚡ Nalog</button>
+          {user && user.uloga==="admin" && (
+            <button style={{padding:"5px 10px",borderRadius:6,border:"1px solid #fecaca",background:"#fef2f2",color:"#ef4444",cursor:"pointer",fontSize:10,fontWeight:700}} onClick={function(){obrisiProizvod(p.id,p.naziv);}}>🗑️ Obrisi</button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   var poKupcu={};
   filtrirani.forEach(function(p){
@@ -1048,36 +1135,57 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
     poKupcu[k].push(p);
   });
 
-  var BOJE=["#1d4ed8","#7c3aed","#0891b2","#059669"];
-  var SLOJ=["A","B","C","D"];
-
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <h2 style={{margin:0,fontSize:20,fontWeight:800}}>📦 Baza proizvoda</h2>
-        <div style={{fontSize:13,color:"#64748b",fontWeight:600}}>{filtrirani.length} / {db.proizvodi.length} proizvoda</div>
+        <div style={{fontSize:13,color:"#64748b",fontWeight:600}}>
+          {filtrirani.length} / {svi.length} &nbsp;·&nbsp;
+          <span style={{color:"#1d4ed8"}}>🧮 {poTipu.folija.length}</span> &nbsp;
+          <span style={{color:"#059669"}}>🛍️ {poTipu.kesa.length}</span> &nbsp;
+          <span style={{color:"#7c3aed"}}>🔄 {poTipu.spulna.length}</span>
+        </div>
       </div>
+
       <div style={Object.assign({},card,{marginBottom:14,padding:"14px 16px"})}>
         <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-          <input style={Object.assign({},inp,{flex:1,minWidth:160})} placeholder="🔍 Pretraži..." value={pretraga} onChange={function(e){setPretraga(e.target.value);}}/>
+          <input style={Object.assign({},inp,{flex:1,minWidth:160})} placeholder="🔍 Pretrazi naziv ili kupca..." value={pretraga} onChange={function(e){setPretraga(e.target.value);}}/>
           <select style={Object.assign({},inp,{width:170})} value={filterKupac} onChange={function(e){setFilterKupac(e.target.value);}}>
             <option value="">👤 Svi kupci</option>
             {kupci.map(function(k){return <option key={k} value={k}>{k}</option>;})}
           </select>
           <select style={Object.assign({},inp,{width:140})} value={filterTip} onChange={function(e){setFilterTip(e.target.value);}}>
             <option value="">🏷️ Svi tipovi</option>
-            <option value="folija">Folija</option><option value="kesa">Kesa</option><option value="spulna">Špulna</option>
+            <option value="folija">🧮 Folije</option>
+            <option value="kesa">🛍️ Kese</option>
+            <option value="spulna">🔄 Spulne</option>
+          </select>
+          <select style={Object.assign({},inp,{width:140})} value={sort} onChange={function(e){setSort(e.target.value);}}>
+            <option value="datum">Najnoviji</option>
+            <option value="naziv">Po nazivu</option>
+            <option value="kupac">Po kupcu</option>
+            <option value="tip">Po tipu</option>
           </select>
           {(filterKupac||filterTip||pretraga)&&(
             <button style={{padding:"8px 12px",borderRadius:7,border:"1px solid #e2e8f0",background:"#f8fafc",color:"#64748b",fontWeight:700,fontSize:12,cursor:"pointer"}} onClick={function(){setFilterKupac("");setFilterTip("");setPretraga("");}}>✕ Reset</button>
           )}
         </div>
       </div>
-      {db.proizvodi.length===0?(
+
+      {svi.length===0?(
         <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
           <div style={{fontSize:36,marginBottom:10}}>📦</div>
           <div style={{marginBottom:12}}>Baza je prazna.</div>
-          <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>+ Nova kalkulacija</button>
+          <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setPage("kalk_folija");}}>🧮 Nova folija</button>
+            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setPage("kalk_kesa");}}>🛍️ Nova kesa</button>
+            <button style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}} onClick={function(){setPage("kalk_spulna");}}>🔄 Nova spulna</button>
+          </div>
+        </div>
+      ):filtrirani.length===0?(
+        <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
+          <div style={{fontSize:28,marginBottom:8}}>🔍</div>
+          <div>Nema rezultata za zadate filtere.</div>
         </div>
       ):(
         Object.keys(poKupcu).sort().map(function(kupac){
@@ -1091,35 +1199,7 @@ function BazaProizvoda({db,setDb,card,inp,lbl,eu,msg,setPage,TIP_BOJA,TIP_LAB}) 
               </div>
               <div style={{background:"#fff",borderRadius:"0 0 10px 10px",border:"1px solid #e2e8f0",borderTop:"none"}}>
                 {proizvKupca.map(function(p,pi){
-                  var mats=(p.mats||[]).filter(function(m){return m.tip;});
-                  return(
-                    <div key={p.id} style={{padding:"14px 16px",borderBottom:pi<proizvKupca.length-1?"1px solid #f1f5f9":"none",display:"flex",gap:14,alignItems:"flex-start"}}>
-                      <span style={{background:(TIP_BOJA[p.tip]||"#64748b")+"20",color:TIP_BOJA[p.tip]||"#64748b",borderRadius:6,padding:"3px 10px",fontWeight:700,fontSize:10,flexShrink:0,marginTop:2}}>{TIP_LAB[p.tip]||"—"}</span>
-                      <div style={{flex:1}}>
-                        <div style={{fontWeight:800,fontSize:14,marginBottom:4}}>{p.naziv}</div>
-                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                          {mats.map(function(m,i){
-                            return(
-                              <span key={i} style={{fontSize:11,background:BOJE[i]+"15",color:BOJE[i],borderRadius:5,padding:"2px 7px",fontWeight:700}}>
-                                {SLOJ[i]}: {m.tip} {m.deb}µ
-                              </span>
-                            );
-                          })}
-                          {p.sir&&<span style={{fontSize:11,color:"#64748b",padding:"2px 7px",background:"#f1f5f9",borderRadius:5}}>📏 {p.sir}mm</span>}
-                        </div>
-                      </div>
-                      {p.res&&p.res.k1&&(
-                        <div style={{textAlign:"right",flexShrink:0}}>
-                          <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>Cena/1000m</div>
-                          <div style={{fontSize:18,fontWeight:800,color:"#1d4ed8"}}>{eu(p.res.k1)}</div>
-                        </div>
-                      )}
-                      <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0}}>
-                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("kalk_folija");}}>📋 Otvori</button>
-                        <button style={{padding:"5px 12px",borderRadius:6,border:"none",background:"#059669",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}} onClick={function(){setPage("novi_nalog");}}>⚡ Nalog</button>
-                      </div>
-                    </div>
-                  );
+                  return renderProizvod(p,pi,proizvKupca.length);
                 })}
               </div>
             </div>
@@ -1422,6 +1502,7 @@ export default function App() {
   const [user,setUser]=useState(null);
   const [page,setPage]=useState("dash");
   const [db,setDb]=useState({proizvodi:[],ponude:[],nalozi:[]});
+  const [kalkIzBaze,setKalkIzBaze]=useState(null); // proizvod iz baze da se uvuce u kalkulator
   const [notif,setNotif]=useState(null);
   const [lIme,setLIme]=useState("");
   const [lPass,setLPass]=useState("");
@@ -1647,8 +1728,8 @@ export default function App() {
         )}
 
         {/* KALKULATORI */}
-        {page==="kalk_folija"&&<KalkulatorFolije user={user} db={db} setDb={setDb} setPage={setPage} msg={msg} inp={inp} card={card} lbl={lbl}/>}
-        {page==="kalk_kesa"&&<KalkulatorKese2 user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
+        {page==="kalk_folija"&&<KalkulatorFolije user={user} db={db} setDb={setDb} kalkIzBaze={kalkIzBaze} setKalkIzBaze={setKalkIzBaze} setPage={setPage} msg={msg} inp={inp} card={card} lbl={lbl}/>}
+        {page==="kalk_kesa"&&<KalkulatorKese2 user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl} db={db} setDb={setDb} kalkIzBaze={kalkIzBaze} setKalkIzBaze={setKalkIzBaze}/>}
         {page==="kalk_spulna"&&<KalkulatorSpulne user={user} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
 
         {/* PONUDE */}
@@ -1822,7 +1903,7 @@ export default function App() {
 
         {/* BAZA PROIZVODA */}
         {page==="baza"&&(          <BazaProizvoda
-            db={db} setDb={setDb} card={card} inp={inp} lbl={lbl}
+            db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} user={user} setKalkIzBaze={setKalkIzBaze}
             eu={eu} msg={msg} setPage={setPage}
             TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}
           />
@@ -1831,7 +1912,7 @@ export default function App() {
         {/* MAGACIN */}
         {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
         {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
-        {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
+        {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl} kalkIzBaze={kalkIzBaze} setKalkIzBaze={setKalkIzBaze}/>}
 
         {/* PODESAVANJA */}
         {page==="pod"&&user.uloga==="admin"&&(
