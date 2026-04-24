@@ -3,6 +3,20 @@ import { supabase } from "./supabase.js";
 
 var dnow = function() { return new Date().toLocaleDateString("sr-RS"); };
 
+// QR kod za rolnu - vodi na ?rolna=BR_ROLNE
+function QRRolna({brRolne, size}) {
+  var sz = size || 60;
+  var url = window.location.origin + "?rolna=" + encodeURIComponent(brRolne);
+  return (
+    <img
+      src={"https://api.qrserver.com/v1/create-qr-code/?size="+sz+"x"+sz+"&data="+encodeURIComponent(url)}
+      alt={"QR "+brRolne}
+      style={{width:sz,height:sz,display:"block",borderRadius:4}}
+      title={brRolne}
+    />
+  );
+}
+
 // Tipovi materijala sa debljinama i gustocama - isti kao u kalkulatoru
 var MAT_DATA_MAG = {
   "BOPP": [5,10,12,15,18,20,25,28,30,35,40,45,50,55,60,65,70].map(function(d){return {d:d,t:+(d*0.91).toFixed(2)};}),
@@ -224,6 +238,187 @@ function parseExcelText(text) {
   return rolne;
 }
 
+// Mobilna stranica za skeniranje QR koda rolne - unos lokacije
+export function MobilniMagacin({brRolne}) {
+  var [rolna, setRolna] = useState(null);
+  var [loading, setLoading] = useState(true);
+  var [lokacija, setLokacija] = useState("");
+  var [napomena, setNapomena] = useState("");
+  var [saved, setSaved] = useState(false);
+  var [saving, setSaving] = useState(false);
+  var [greska, setGreska] = useState("");
+
+  useEffect(function(){
+    if(!brRolne) { setLoading(false); setGreska("Nema broja rolne!"); return; }
+    supabase.from("magacin").select("*").eq("br_rolne", brRolne).single()
+      .then(function(r){
+        if(r.data) {
+          setRolna(r.data);
+          setLokacija(r.data.palet || "");
+          setNapomena(r.data.napomena || "");
+        } else {
+          setGreska("Rolna '"+brRolne+"' nije pronađena u magacinu.");
+        }
+        setLoading(false);
+      });
+  }, [brRolne]);
+
+  async function sacuvaj() {
+    if(!lokacija.trim()) { setGreska("Unesite lokaciju!"); return; }
+    setSaving(true);
+    setGreska("");
+    try {
+      var res = await supabase.from("magacin")
+        .update({palet: lokacija.trim(), napomena: napomena})
+        .eq("br_rolne", brRolne);
+      if(res.error) throw res.error;
+      setRolna(function(r){ return Object.assign({},r,{palet:lokacija,napomena:napomena}); });
+      setSaved(true);
+    } catch(e) {
+      setGreska("Greška: "+e.message);
+    }
+    setSaving(false);
+  }
+
+  var st = {
+    page: {minHeight:"100vh",background:"#f1f5f9",fontFamily:"system-ui,sans-serif",padding:0},
+    hdr:  {background:"#0f172a",color:"#fff",padding:"16px 20px",display:"flex",alignItems:"center",gap:12},
+    logo: {fontSize:22,fontWeight:800},
+    sub:  {fontSize:12,color:"#94a3b8",marginTop:2},
+    card: {background:"#fff",borderRadius:12,padding:20,margin:"16px",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"},
+    lbl:  {fontSize:12,fontWeight:600,color:"#64748b",display:"block",marginBottom:4},
+    inp:  {width:"100%",padding:"12px 14px",borderRadius:8,border:"1.5px solid #e2e8f0",fontSize:15,boxSizing:"border-box",outline:"none"},
+    btn:  {width:"100%",padding:"14px",borderRadius:10,border:"none",background:"#059669",color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer"},
+    row:  {display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f1f5f9"},
+    key:  {fontSize:13,color:"#64748b"},
+    val:  {fontSize:13,fontWeight:700,color:"#1e293b",textAlign:"right"},
+  };
+
+  if(loading) return (
+    <div style={Object.assign({},st.page,{display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12})}>
+      <div style={{fontSize:36}}>⏳</div>
+      <div style={{color:"#64748b",fontWeight:600}}>Učitavam podatke...</div>
+    </div>
+  );
+
+  if(greska && !rolna) return (
+    <div style={Object.assign({},st.page,{display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:24})}>
+      <div style={{fontSize:48}}>❌</div>
+      <div style={{color:"#ef4444",fontWeight:700,textAlign:"center"}}>{greska}</div>
+      <div style={{color:"#64748b",fontSize:13}}>Br. rolne: {brRolne}</div>
+    </div>
+  );
+
+  if(saved) return (
+    <div style={Object.assign({},st.page,{display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:24})}>
+      <div style={{fontSize:72}}>✅</div>
+      <div style={{fontSize:20,fontWeight:800,color:"#059669"}}>Lokacija sačuvana!</div>
+      <div style={st.card}>
+        <div style={st.row}><span style={st.key}>Rolna</span><span style={Object.assign({},st.val,{color:"#1d4ed8"})}>{rolna.br_rolne}</span></div>
+        <div style={st.row}><span style={st.key}>Tip</span><span style={st.val}>{rolna.tip} {rolna.deb>0?rolna.deb+"µ":""}</span></div>
+        <div style={st.row}><span style={st.key}>Širina</span><span style={st.val}>{rolna.sirina}mm</span></div>
+        <div style={st.row}><span style={st.key}>Metraža</span><span style={Object.assign({},st.val,{color:"#059669"})}>{(rolna.metraza_ost||rolna.metraza||0).toLocaleString()}m</span></div>
+        <div style={st.row}><span style={st.key}>📍 Lokacija</span><span style={Object.assign({},st.val,{color:"#f59e0b",fontSize:16})}>{lokacija}</span></div>
+      </div>
+      <button onClick={function(){setSaved(false);}} style={Object.assign({},st.btn,{background:"#1d4ed8",maxWidth:300})}>
+        ✏️ Izmeni lokaciju
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={st.page}>
+      {/* Header */}
+      <div style={st.hdr}>
+        <div>
+          <div style={st.logo}>📦 Maropack — Magacin</div>
+          <div style={st.sub}>Unos lokacije rolne</div>
+        </div>
+      </div>
+
+      {/* Rolna info */}
+      <div style={st.card}>
+        <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Podaci o rolni</div>
+        <div style={Object.assign({},st.row,{paddingTop:0})}>
+          <span style={st.key}>Br. rolne</span>
+          <span style={Object.assign({},st.val,{color:"#1d4ed8",fontSize:15})}>{rolna.br_rolne}</span>
+        </div>
+        <div style={st.row}>
+          <span style={st.key}>Tip</span>
+          <span style={st.val}>{rolna.tip} {rolna.deb>0?rolna.deb+"µ":""}</span>
+        </div>
+        <div style={st.row}>
+          <span style={st.key}>Širina</span>
+          <span style={st.val}>{rolna.sirina}mm</span>
+        </div>
+        <div style={st.row}>
+          <span style={st.key}>Metraža ostalo</span>
+          <span style={Object.assign({},st.val,{color:"#059669"})}>{(rolna.metraza_ost||rolna.metraza||0).toLocaleString()}m</span>
+        </div>
+        {rolna.kg_neto>0 && <div style={st.row}><span style={st.key}>Kg neto</span><span style={st.val}>{rolna.kg_neto} kg</span></div>}
+        {rolna.lot && <div style={st.row}><span style={st.key}>LOT</span><span style={Object.assign({},st.val,{color:"#1d4ed8"})}>{rolna.lot}</span></div>}
+        {rolna.sch && <div style={st.row}><span style={st.key}>Sch.</span><span style={st.val}>{rolna.sch}</span></div>}
+        {rolna.dobavljac && <div style={st.row}><span style={st.key}>Dobavljač</span><span style={st.val}>{rolna.dobavljac}</span></div>}
+        {rolna.datum && <div style={st.row}><span style={st.key}>Datum prijema</span><span style={st.val}>{rolna.datum}</span></div>}
+        <div style={Object.assign({},st.row,{borderBottom:"none"})}>
+          <span style={st.key}>Status</span>
+          <span style={{fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:6,background:rolna.status==="Na stanju"?"#f0fdf4":"#f1f5f9",color:rolna.status==="Na stanju"?"#166534":"#64748b"}}>{rolna.status}</span>
+        </div>
+      </div>
+
+      {/* Trenutna lokacija */}
+      {rolna.palet && (
+        <div style={Object.assign({},st.card,{background:"#fef3c7",border:"1.5px solid #fde68a",margin:"0 16px 16px"})}>
+          <div style={{fontSize:12,color:"#92400e",fontWeight:700,marginBottom:4}}>📍 Trenutna lokacija</div>
+          <div style={{fontSize:20,fontWeight:800,color:"#92400e"}}>{rolna.palet}</div>
+        </div>
+      )}
+
+      {/* Forma za lokaciju */}
+      <div style={st.card}>
+        <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:1,marginBottom:16}}>
+          {rolna.palet ? "Izmeni lokaciju" : "Unesi lokaciju"}
+        </div>
+
+        <div style={{marginBottom:14}}>
+          <label style={st.lbl}>📍 Lokacija / Palet *</label>
+          <input style={Object.assign({},st.inp,{
+            fontSize:20,fontWeight:700,textAlign:"center",
+            border:"2px solid "+(lokacija?"#059669":"#e2e8f0"),
+            color:lokacija?"#059669":"#94a3b8"
+          })}
+          value={lokacija}
+          onChange={function(e){setLokacija(e.target.value);}}
+          placeholder="npr. B5, MM, Nadstrešnica..."
+          autoFocus
+          />
+          <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>Unesite oznaku lokacije ili paleta</div>
+        </div>
+
+        <div style={{marginBottom:20}}>
+          <label style={st.lbl}>Napomena (opciono)</label>
+          <textarea
+            style={Object.assign({},st.inp,{height:70,resize:"none",fontSize:13})}
+            value={napomena}
+            onChange={function(e){setNapomena(e.target.value);}}
+            placeholder="Npr. zadnji red, oštećen omot..."
+          />
+        </div>
+
+        {greska && (
+          <div style={{padding:"10px 14px",background:"#fef2f2",color:"#991b1b",borderRadius:8,marginBottom:14,fontSize:13,fontWeight:600}}>
+            ⚠️ {greska}
+          </div>
+        )}
+
+        <button onClick={sacuvaj} disabled={saving} style={Object.assign({},st.btn,{opacity:saving?0.7:1})}>
+          {saving ? "⏳ Čuvam..." : "💾 Sačuvaj lokaciju"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Magacin({msg, inp, card, lbl, user}) {
   var [rolne, setRolne] = useState([]);
   var [loading, setLoading] = useState(true);
@@ -232,6 +427,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
   var [filterSirina, setFilterSirina] = useState("");
   var [filterStatus, setFilterStatus] = useState("aktivne");
   var [saving, setSaving] = useState(false);
+  var [qrRolna, setQrRolna] = useState(null); // rolna za QR modal
 
   // Import states
   var [importTab, setImportTab] = useState("pdf"); // pdf, excel, rucni
@@ -644,6 +840,27 @@ export default function Magacin({msg, inp, card, lbl, user}) {
 
   return (
     <div>
+      {/* QR Modal */}
+      {qrRolna && (
+        <div onClick={function(){setQrRolna(null);}} style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,padding:32,textAlign:"center",boxShadow:"0 20px 60px rgba(0,0,0,0.3)",maxWidth:340}}>
+            <div style={{fontSize:13,color:"#64748b",marginBottom:4}}>QR kod za rolnu</div>
+            <div style={{fontSize:20,fontWeight:800,color:"#1d4ed8",marginBottom:16}}>{qrRolna.br_rolne}</div>
+            <div style={{display:"inline-block",background:"#fff",padding:12,borderRadius:10,border:"2px solid #e2e8f0",marginBottom:16}}>
+              <QRRolna brRolne={qrRolna.br_rolne} size={200}/>
+            </div>
+            <div style={{fontSize:12,color:"#64748b",marginBottom:4}}>{qrRolna.tip} {qrRolna.deb>0?qrRolna.deb+"µ":""} · {qrRolna.sirina}mm</div>
+            <div style={{fontSize:12,color:"#64748b",marginBottom:4}}>Metraža: <b>{(qrRolna.metraza_ost||qrRolna.metraza||0).toLocaleString()}m</b> · {qrRolna.kg_neto||"—"} kg neto</div>
+            {qrRolna.lot && <div style={{fontSize:12,color:"#1d4ed8",marginBottom:4}}>LOT: {qrRolna.lot}</div>}
+            {qrRolna.sch && <div style={{fontSize:12,color:"#64748b",marginBottom:16}}>Sch.: {qrRolna.sch} · {qrRolna.palet||"—"}</div>}
+            <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+              <button onClick={function(){window.print();}} style={{padding:"8px 18px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,cursor:"pointer"}}>🖨️ Štampaj</button>
+              <button onClick={function(){setQrRolna(null);}} style={{padding:"8px 18px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,cursor:"pointer"}}>Zatvori</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
         <h2 style={{margin:0,fontSize:20,fontWeight:800}}>🏭 Magacin</h2>
         <div style={{display:"flex",gap:6}}>
@@ -699,7 +916,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Br. rolne","Tip","Deb (µ)","Širina","Ostalo (m)","Kg neto","LOT","Sch.","Lokacija","Datum","Status",""].map(function(h){
+                    {["QR","Br. rolne","Tip","Deb (µ)","Širina","Ostalo (m)","Kg neto","LOT","Sch.","Lokacija","Datum","Status",""].map(function(h){
                       return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>;
                     })}
                   </tr>
@@ -708,6 +925,9 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                   {filtrirane.map(function(r){
                     return (
                       <tr key={r.id} style={{borderBottom:"1px solid #f1f5f9",opacity:r.status==="Iskorišćeno"?0.5:1}}>
+                        <td style={{padding:"4px",cursor:"pointer"}} onClick={function(){setQrRolna(r);}} title="Klikni za QR modal">
+                          {r.br_rolne && <QRRolna brRolne={r.br_rolne} size={52}/>}
+                        </td>
                         <td style={{padding:"8px",fontWeight:700,color:"#1d4ed8",whiteSpace:"nowrap"}}>{r.br_rolne}</td>
                         <td style={{padding:"8px",fontWeight:600}}>{r.tip}</td>
                         <td style={{padding:"8px",color:"#7c3aed",fontWeight:600}}>{r.deb>0?r.deb+"µ":"—"}</td>
@@ -793,7 +1013,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                   <div style={{overflowX:"auto"}}>
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                       <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                        {["Tip","Deb (µ)","Širina","Metraža","Kg neto","LOT","Sch.","Lokacija"].map(function(h){
+                        {["Tip","Deb (µ)","Širina","Metraža","Kg neto","LOT","Sch."].map(function(h){
                           return <th key={h} style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;
                         })}
                       </tr></thead>
@@ -801,14 +1021,13 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                         {parsedRolne.map(function(r,i){
                           return (
                             <tr key={i} style={{borderBottom:"1px solid #f1f5f9"}}>
-                              <td style={{padding:"6px 8px",fontWeight:600}}>{r.tip}</td>
+                              <td style={{padding:"6px 8px",fontWeight:700,color:"#059669"}}>{r.tip}</td>
                               <td style={{padding:"6px 8px",color:"#7c3aed",fontWeight:600}}>{r.deb>0?r.deb+"µ":"—"}</td>
                               <td style={{padding:"6px 8px"}}>{r.sirina}mm</td>
-                              <td style={{padding:"6px 8px",color:"#059669",fontWeight:600}}>{(r.metraza||0).toLocaleString()}m</td>
-                              <td style={{padding:"6px 8px",fontWeight:600}}>{r.kg_neto||"?"} kg</td>
+                              <td style={{padding:"6px 8px",color:"#059669",fontWeight:700}}>{(r.metraza||0).toLocaleString()}m</td>
+                              <td style={{padding:"6px 8px",fontWeight:700}}>{r.kg_neto||"?"} kg</td>
                               <td style={{padding:"6px 8px",color:"#1d4ed8"}}>{r.lot||"—"}</td>
                               <td style={{padding:"6px 8px"}}>{r.sch||"—"}</td>
-                              <td style={{padding:"6px 8px"}}>{r.palet||"—"}</td>
                             </tr>
                           );
                         })}
