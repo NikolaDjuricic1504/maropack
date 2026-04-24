@@ -148,7 +148,10 @@ export default function NoviNalogIzBaze({user, db, msg, setPage, inp, card, lbl}
 
       var nalogData = {
         datumIsp:forma.datumIsp, sk:+forma.sk,
-        mats:izabran.mats||[], sir:+(izabran.sir||0), ik:+(izabran.ik||izabran.sir||0),
+        mats:(izabran.mats||[]).map(function(m){return Object.assign({},m);}),
+        mats_list:(izabran.mats||[]).map(function(m){return Object.assign({},m);}),
+        sir:+(izabran.sir||0), ik:+(izabran.ik||izabran.sir||0),
+        nal:+(izabran.nal||0), met:+(izabran.met||0),
         grafika:forma.grafika, stm:forma.stm, brBoja:forma.brBoja, smer:forma.smer,
         obimValjka:forma.obimValjka, hilzna:forma.hilzna,
         tipPerf:forma.tipPerf, oblikPerf:forma.oblikPerf,
