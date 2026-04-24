@@ -321,6 +321,10 @@ export default function Magacin({msg, inp, card, lbl, user}) {
     }
     var datum = dat || new Date().toLocaleDateString("sr-RS");
 
+    // PDF.js cesto razdvaja "12.258" na tokene "12" i ".258" koji se spoje sa razmakom
+    // Pre parsiranja spoji nazad: "12 .258" -> "12.258", "1 .017" -> "1.017"
+    text = text.replace(/(\d)\s+\.(\d{3})\b/g, "$1.$2");
+
     // Italian number format: 12.258 = 12258, 1.017 = 1017
     function parseIt(s) {
       s = String(s||"").trim();
