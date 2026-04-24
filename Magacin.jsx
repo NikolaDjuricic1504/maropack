@@ -12,6 +12,48 @@ var MAT_TIPOVI = [
   "Papir","Papir silikonizani"
 ];
 
+// g/m² po tipu i debljini za auto-izracun kg
+var GSM_TABELA = {
+  "BOPP": {12:10.9, 15:13.6, 18:16.4, 20:18.2, 25:22.7, 30:27.3, 35:31.8, 40:36.4},
+  "OPP":  {18:16.4, 20:18.2, 25:22.7, 30:27.3, 35:31.8, 40:36.4},
+  "CPP":  {20:18.8, 25:23.5, 30:28.2, 40:37.6, 50:47.0, 60:56.4},
+  "PET":  {12:16.8, 15:21.0, 19:26.6, 23:32.2},
+  "PA":   {15:18.0, 20:24.0, 25:30.0},
+  "LDPE": {30:27.9, 40:37.2, 50:46.5, 60:55.8},
+  "ALU":  {7:18.9, 9:24.3, 12:32.4},
+  "FXC":  {20:18.8, 25:23.5, 30:28.2},
+  "FXPU": {20:18.8, 25:23.5, 28:26.3, 29:27.3, 30:28.2},
+  "CC White 55g": {0:55},
+  "CC White 60g": {0:60},
+  "Papir": {0:60},
+  "Papir silikonizani": {0:65},
+};
+
+function izracunajKg(tip, deb, sirina, metraza) {
+  if(!tip || !sirina || !metraza) return {kg_neto:0, kg_bruto:0};
+  var gsm = 0;
+  var tabTip = Object.keys(GSM_TABELA).find(function(k){ return tip.toUpperCase().startsWith(k.toUpperCase()); });
+  if(tabTip) {
+    var tab = GSM_TABELA[tabTip];
+    if(tab[0]) { gsm = tab[0]; } // fixed gsm (papir, CC)
+    else if(deb && tab[+deb]) { gsm = tab[+deb]; }
+    else if(deb) {
+      // Interpolate
+      var keys = Object.keys(tab).map(Number).sort(function(a,b){return a-b;});
+      var lower = keys.filter(function(k){return k<=+deb;}).pop();
+      var upper = keys.filter(function(k){return k>=+deb;})[0];
+      if(lower && upper && lower !== upper) {
+        gsm = tab[lower] + (tab[upper]-tab[lower]) * (+deb-lower)/(upper-lower);
+      } else if(lower) { gsm = tab[lower]; }
+      else if(upper) { gsm = tab[upper]; }
+    }
+  }
+  if(!gsm && deb) gsm = +deb * 0.91; // default: mic * gustoca
+  if(!gsm) return {kg_neto:0, kg_bruto:0};
+  var kg_neto = Math.round(gsm * +sirina/1000 * +metraza / 1000 * 10) / 10;
+  return {kg_neto: kg_neto, kg_bruto: Math.round(kg_neto * 1.025 * 10)/10};
+}
+
 // Parse PDF packing list text
 function parsePdfText(text) {
   var rolne = [];
@@ -262,27 +304,38 @@ export default function Magacin({msg, inp, card, lbl, user}) {
 
     // Tip materijala - prepoznaj iz teksta
     function getTip(chunk) {
-      if(/CLAY COATED.*055g|CC WHITE.*055/i.test(chunk)) return "CC White 55g";
-      if(/CLAY COATED.*060g|CC WHITE.*060/i.test(chunk)) return "CC White 60g";
-      if(/CLAY COATED.*070g/i.test(chunk)) return "CC White 70g";
-      if(/CLAY COATED.*080g/i.test(chunk)) return "CC White 80g";
+      if(/CLAY COATED.*055g|CC WHITE.*055/i.test(chunk)) return {tip:"CC White 55g", deb:0, gsm:55};
+      if(/CLAY COATED.*060g|CC WHITE.*060/i.test(chunk)) return {tip:"CC White 60g", deb:0, gsm:60};
+      if(/CLAY COATED.*070g/i.test(chunk)) return {tip:"CC White 70g", deb:0, gsm:70};
+      if(/CLAY COATED.*080g/i.test(chunk)) return {tip:"CC White 80g", deb:0, gsm:80};
       if(/CLAY COATED/i.test(chunk)) {
         var gm = chunk.match(/(\d{2,3})g/i);
-        return "CC White " + (gm ? gm[1]+"g" : "");
+        var gsm2 = gm ? parseInt(gm[1]) : 60;
+        return {tip:"CC White " + (gm ? gm[1]+"g" : ""), deb:0, gsm:gsm2};
       }
-      if(/BOPP SEDEF/i.test(chunk)) return "BOPP SEDEF";
-      if(/BOPP/i.test(chunk)) return "BOPP";
-      if(/OPP/i.test(chunk)) return "OPP";
-      if(/FXPU/i.test(chunk)) return "FXPU";
-      if(/FXCB/i.test(chunk)) return "FXCB";
-      if(/FXC/i.test(chunk)) return "FXC";
-      if(/PET/i.test(chunk)) return "PET";
-      if(/CPP/i.test(chunk)) return "CPP";
-      if(/LDPE|LLDPE/i.test(chunk)) return "LDPE";
-      if(/PA\/PE/i.test(chunk)) return "PA/PE";
-      if(/PAPIR|PAPER|SILICON/i.test(chunk)) return "Papir silikonizani";
-      if(/ALU/i.test(chunk)) return "ALU";
-      return "";
+      if(/BOPP SEDEF/i.test(chunk)) return {tip:"BOPP SEDEF", deb:20, gsm:0};
+      if(/BOPP/i.test(chunk)) {
+        var dm = chunk.match(/(\d{2})\s*mic/i) || chunk.match(/(\d{2})\s*u/i);
+        var d = dm ? parseInt(dm[1]) : 20;
+        return {tip:"BOPP", deb:d, gsm:0};
+      }
+      if(/FXPU/i.test(chunk)) {
+        var dm = chunk.match(/(\d{2})\s*mic/i); var d = dm?parseInt(dm[1]):29;
+        return {tip:"FXPU", deb:d, gsm:0};
+      }
+      if(/FXCB/i.test(chunk)) return {tip:"FXCB", deb:30, gsm:0};
+      if(/FXC/i.test(chunk)) return {tip:"FXC", deb:30, gsm:0};
+      if(/OPP/i.test(chunk)) {
+        var dm = chunk.match(/(\d{2})\s*mic/i); var d = dm?parseInt(dm[1]):30;
+        return {tip:"OPP", deb:d, gsm:0};
+      }
+      if(/PET/i.test(chunk)) return {tip:"PET", deb:12, gsm:0};
+      if(/CPP/i.test(chunk)) return {tip:"CPP", deb:20, gsm:0};
+      if(/LDPE|LLDPE/i.test(chunk)) return {tip:"LDPE", deb:40, gsm:0};
+      if(/PA\/PE/i.test(chunk)) return {tip:"PA/PE", deb:15, gsm:0};
+      if(/PAPIR|PAPER|SILICON/i.test(chunk)) return {tip:"Papir silikonizani", deb:0, gsm:65};
+      if(/ALU/i.test(chunk)) return {tip:"ALU", deb:9, gsm:0};
+      return null;
     }
 
     // Strategija: trazi blokove koji imaju Pallet i Gross wt
@@ -312,8 +365,11 @@ export default function Magacin({msg, inp, card, lbl, user}) {
       }
       
       // Tip materijala iz prethodnog bloka
-      var tip = getTip(prevBlock);
-      if(!tip) continue;
+      var tipObj = getTip(prevBlock);
+      if(!tipObj) continue;
+      var tip = tipObj.tip;
+      var deb = tipObj.deb;
+      var gsm = tipObj.gsm;
       
       // Sirina iz opisa: "1440mm" ili "1.440" u kolonama
       var sirM = prevBlock.match(/(\d{3,4})\s*mm/i) || prevBlock.match(/1[.,]440/) || prevBlock.match(/(\d{3,4})\s*$/m);
@@ -345,8 +401,15 @@ export default function Magacin({msg, inp, card, lbl, user}) {
       if(metraza < 100 || metraza > 100000) continue;
       if(sirina < 50 || sirina > 5000) continue;
       
+      // Auto-izracun kg ako nisu nadjeni u PDFu
+      if((!kg_neto || kg_neto < 1) && gsm > 0 && sirina > 0 && metraza > 0) {
+        kg_neto = Math.round(gsm * sirina/1000 * metraza / 1000 * 10) / 10;
+        kg_bruto = Math.round(kg_neto * 1.025 * 10) / 10;
+      }
+
       rolne.push({
         tip: tip,
+        deb: deb || 0,
         sirina: sirina,
         metraza: metraza,
         metraza_ost: metraza,
@@ -357,7 +420,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
         palet: palet,
         kg_bruto: kg_bruto,
         kg_neto: kg_neto,
-        napomena: tip+" "+sirina+"mm LOT:"+lot,
+        napomena: tip+(deb?" "+deb+"mic":"")+" "+sirina+"mm LOT:"+lot,
         status: "Na stanju"
       });
     }
@@ -500,7 +563,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
       var suffix = sch ? sch.replace("/","-") : String(Date.now()).slice(-5);
       var brRolne = "R-"+new Date().getFullYear()+"-"+suffix;
       var res = await supabase.from("magacin").insert([{
-        br_rolne: brRolne, tip:form.tip, sirina:+form.sirina,
+        br_rolne: brRolne, tip:form.tip, deb:+form.deb||0, sirina:+form.sirina,
         metraza:+form.metraza, metraza_ost:+form.metraza,
         kg_bruto:+form.kg_bruto||0, kg_neto:+form.kg_neto||0,
         lot:form.lot, dobavljac:form.dobavljac, datum:form.datum,
@@ -509,7 +572,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
       }]);
       if(res.error) throw res.error;
       msg("Rolna "+brRolne+" dodata!");
-      setForm({tip:"",sirina:"",metraza:"",kg_bruto:"",kg_neto:"",lot:"",dobavljac:"",datum:dnow(),sch:"",palet:"",napomena:""});
+      setForm({tip:"",deb:"",sirina:"",metraza:"",gsm:"",kg_bruto:"",kg_neto:"",lot:"",dobavljac:"",datum:dnow(),sch:"",palet:"",napomena:""});
       loadRolne();
       setTab("stanje");
     } catch(e) { msg("Greška: "+e.message, "err"); }
@@ -594,7 +657,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                 <thead>
                   <tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Br. rolne","Tip","Širina","Ostalo (m)","Kg neto","LOT","Sch.","Lokacija","Datum","Status",""].map(function(h){
+                    {["Br. rolne","Tip","Deb (mic)","Širina","Ostalo (m)","Kg neto","LOT","Sch.","Lokacija","Datum","Status",""].map(function(h){
                       return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>;
                     })}
                   </tr>
@@ -605,6 +668,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                       <tr key={r.id} style={{borderBottom:"1px solid #f1f5f9",opacity:r.status==="Iskorišćeno"?0.5:1}}>
                         <td style={{padding:"8px",fontWeight:700,color:"#1d4ed8",whiteSpace:"nowrap"}}>{r.br_rolne}</td>
                         <td style={{padding:"8px",fontWeight:600}}>{r.tip}</td>
+                        <td style={{padding:"8px",color:"#7c3aed",fontWeight:600}}>{r.deb>0?r.deb+"mic":"—"}</td>
                         <td style={{padding:"8px"}}>{r.sirina}mm</td>
                         <td style={{padding:"8px",fontWeight:700,color:(r.metraza_ost||0)<(r.metraza||1)*0.2?"#ef4444":"#059669"}}>
                           {(r.metraza_ost||r.metraza||0).toLocaleString()}m
@@ -687,7 +751,7 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                   <div style={{overflowX:"auto"}}>
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                       <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                        {["Tip","Širina","Metraža","Kg bruto","Kg neto","LOT","Sch.","Lokacija"].map(function(h){
+                        {["Tip","Deb (mic)","Širina","Metraža","Kg neto","LOT","Sch.","Lokacija"].map(function(h){
                           return <th key={h} style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;
                         })}
                       </tr></thead>
@@ -696,10 +760,10 @@ export default function Magacin({msg, inp, card, lbl, user}) {
                           return (
                             <tr key={i} style={{borderBottom:"1px solid #f1f5f9"}}>
                               <td style={{padding:"6px 8px",fontWeight:600}}>{r.tip}</td>
+                              <td style={{padding:"6px 8px",color:"#7c3aed",fontWeight:600}}>{r.deb>0?r.deb+"mic":"—"}</td>
                               <td style={{padding:"6px 8px"}}>{r.sirina}mm</td>
                               <td style={{padding:"6px 8px",color:"#059669",fontWeight:600}}>{(r.metraza||0).toLocaleString()}m</td>
-                              <td style={{padding:"6px 8px"}}>{r.kg_bruto||"—"} kg</td>
-                              <td style={{padding:"6px 8px"}}>{r.kg_neto||"—"} kg</td>
+                              <td style={{padding:"6px 8px",fontWeight:600}}>{r.kg_neto||"?"} kg</td>
                               <td style={{padding:"6px 8px",color:"#1d4ed8"}}>{r.lot||"—"}</td>
                               <td style={{padding:"6px 8px"}}>{r.sch||"—"}</td>
                               <td style={{padding:"6px 8px"}}>{r.palet||"—"}</td>
@@ -781,16 +845,101 @@ export default function Magacin({msg, inp, card, lbl, user}) {
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
                 <div>
                   <label style={lbl}>Tip materijala *</label>
-                  <select style={inp} value={form.tip} onChange={function(e){var v=e.target.value;setForm(function(f){return Object.assign({},f,{tip:v});});}}>
+                  <select style={inp} value={form.tip} onChange={function(e){
+                    var v=e.target.value;
+                    setForm(function(f){
+                      var kg=izracunajKg(v,f.deb,f.sirina,f.metraza);
+                      return Object.assign({},f,{tip:v,kg_neto:kg.kg_neto||f.kg_neto,kg_bruto:kg.kg_bruto||f.kg_bruto});
+                    });
+                  }}>
                     <option value="">-- Izaberi --</option>
                     {MAT_TIPOVI.map(function(t){return <option key={t} value={t}>{t}</option>;})}
                   </select>
                 </div>
+  
+                {/* Debljina */}
+                <div>
+                  <label style={lbl}>Debljina (mic) *</label>
+                  <input type="number" style={inp} value={form.deb} placeholder="npr. 20"
+                    onChange={function(e){
+                      var v=e.target.value;
+                      setForm(function(f){
+                        var kg = izracunajKg(f.tip, v, f.sirina, f.metraza);
+                        return Object.assign({},f,{deb:v, kg_neto:kg.kg_neto||f.kg_neto, kg_bruto:kg.kg_bruto||f.kg_bruto});
+                      });
+                    }}/>
+                  <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>0 = papir/CC White (koristiti g/m²)</div>
+                </div>
+
+                {/* Sirina */}
+                <div>
+                  <label style={lbl}>Širina (mm) *</label>
+                  <input type="number" style={inp} value={form.sirina} placeholder="npr. 1440"
+                    onChange={function(e){
+                      var v=e.target.value;
+                      setForm(function(f){
+                        var kg=izracunajKg(f.tip,f.deb,v,f.metraza);
+                        return Object.assign({},f,{sirina:v,kg_neto:kg.kg_neto||f.kg_neto,kg_bruto:kg.kg_bruto||f.kg_bruto});
+                      });
+                    }}/>
+                </div>
+
+                {/* Metraza */}
+                <div>
+                  <label style={lbl}>Metraža (m) *</label>
+                  <input type="number" style={inp} value={form.metraza} placeholder="npr. 12258"
+                    onChange={function(e){
+                      var v=e.target.value;
+                      setForm(function(f){
+                        var kg=izracunajKg(f.tip,f.deb,f.sirina,v);
+                        return Object.assign({},f,{metraza:v,kg_neto:kg.kg_neto||f.kg_neto,kg_bruto:kg.kg_bruto||f.kg_bruto});
+                      });
+                    }}/>
+                </div>
+
+                {/* g/m2 samo za papir/CC */}
+                {(!form.deb || +form.deb===0) && (
+                  <div>
+                    <label style={lbl}>g/m² (za papir/CC)</label>
+                    <input type="number" style={inp} value={form.gsm} placeholder="npr. 55"
+                      onChange={function(e){
+                        var v=e.target.value;
+                        setForm(function(f){
+                          var kg2=v&&f.sirina&&f.metraza?{
+                            kg_neto:Math.round(+v*+f.sirina/1000*+f.metraza/1000*10)/10,
+                            kg_bruto:Math.round(+v*+f.sirina/1000*+f.metraza/1000*1.025*10)/10
+                          }:{kg_neto:f.kg_neto,kg_bruto:f.kg_bruto};
+                          return Object.assign({},f,{gsm:v,kg_neto:kg2.kg_neto,kg_bruto:kg2.kg_bruto});
+                        });
+                      }}/>
+                  </div>
+                )}
+
+                {/* Auto-izracunato kg */}
+                {(form.kg_neto>0||form.kg_bruto>0) && (
+                  <div style={{gridColumn:"span 2",padding:"8px 12px",background:"#f0fdf4",borderRadius:6,border:"1px solid #bbf7d0",fontSize:12,display:"flex",gap:16,alignItems:"center"}}>
+                    <span style={{color:"#166534",fontWeight:700}}>⚖️ Auto-izračun:</span>
+                    <span>Neto: <b>{form.kg_neto} kg</b></span>
+                    <span>Bruto: <b>{form.kg_bruto} kg</b></span>
+                    <button onClick={function(){setForm(function(f){return Object.assign({},f,{kg_neto:"",kg_bruto:""});});}} style={{marginLeft:"auto",fontSize:10,padding:"2px 8px",borderRadius:4,border:"1px solid #bbf7d0",background:"#fff",cursor:"pointer",color:"#64748b"}}>Unesi ručno</button>
+                  </div>
+                )}
+
+                {/* Kg polja - samo ako nije auto */}
+                {!(form.kg_neto>0||form.kg_bruto>0) && (
+                  <>
+                    <div>
+                      <label style={lbl}>Bruto kg (ručno)</label>
+                      <input type="number" style={inp} value={form.kg_bruto} onChange={function(e){var v=e.target.value;setForm(function(f){return Object.assign({},f,{kg_bruto:v});});}}/>
+                    </div>
+                    <div>
+                      <label style={lbl}>Neto kg (ručno)</label>
+                      <input type="number" style={inp} value={form.kg_neto} onChange={function(e){var v=e.target.value;setForm(function(f){return Object.assign({},f,{kg_neto:v});});}}/>
+                    </div>
+                  </>
+                )}
+
                 {[
-                  ["Širina (mm) *","sirina","number","npr. 1440"],
-                  ["Metraža (m) *","metraza","number","npr. 12258"],
-                  ["Bruto kg","kg_bruto","number",""],
-                  ["Neto kg","kg_neto","number",""],
                   ["LOT broj","lot","text","npr. U26/00064"],
                   ["Dobavljač","dobavljac","text","npr. Rossella S.p.A."],
                   ["Datum prijema","datum","text",""],
