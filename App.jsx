@@ -3,7 +3,7 @@ import { supabase } from "./supabase.js";
 import { LOGO_B64, SPULNA_B64 } from "./constants.js";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import Magacin from "./Magacin.jsx";
+import Magacin, {MobilniMagacin} from "./Magacin.jsx";
 import KalkulatorKese2 from "./KalkulatorKese2.jsx";
 import PracenjeNaloga from "./PracenjeNaloga.jsx";
 import NalogFolija from "./NalogFolija.jsx";
@@ -1407,11 +1407,15 @@ export default function App() {
   var urlParams = new URLSearchParams(window.location.search);
   var nalogIdParam = urlParams.get("nalog");
   var ponBrParam = urlParams.get("ponbr");
+  var rolnaParam = urlParams.get("rolna");
   if (nalogIdParam) {
     return <MobilniRadnik nalogId={nalogIdParam}/>;
   }
   if (ponBrParam) {
     return <MobilniRadnikPonBr ponBr={ponBrParam}/>;
+  }
+  if (rolnaParam) {
+    return <MobilniMagacin brRolne={rolnaParam}/>;
   }
   // -----------------------------------------------------
 
