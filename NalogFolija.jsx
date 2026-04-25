@@ -3,7 +3,7 @@ import PlanRezanjaNalog from "./PlanRezanjaNalog.jsx";
 
 export default function NalogFolija({ nalog, onClose, msg }) {
   const [tab, setTab] = useState("rez");
-
+  
   return (
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column"}}>
       <div style={{background:"#0f172a",padding:"10px 16px",display:"flex",alignItems:"center",gap:10,color:"#fff"}}>
@@ -14,32 +14,29 @@ export default function NalogFolija({ nalog, onClose, msg }) {
           📄 Radni nalog: {nalog?.ponBr || nalog?.br || "—"} · {nalog?.kupac || "—"}
         </div>
       </div>
-
+      
       <div style={{background:"#1e293b",padding:"8px 16px 0",display:"flex",gap:4}}>
         <button onClick={() => setTab("rez")} style={tabBtn(tab==="rez")}>✂️ Rezanje</button>
         <button onClick={() => setTab("mat")} style={tabBtn(tab==="mat")}>📦 Materijal</button>
       </div>
-
+      
       <div style={{flex:1,overflow:"auto",background:"#f1f5f9",padding:20}}>
         {tab === "rez" && (
           <div style={card}>
             <h2 style={{marginTop:0}}>✂️ Nalog za rezanje</h2>
-
             <div style={grid}>
               <Info label="Broj naloga" value={nalog?.ponBr || nalog?.br || "—"} />
               <Info label="Kupac" value={nalog?.kupac || "—"} />
               <Info label="Proizvod" value={nalog?.prod || nalog?.naziv || "—"} />
               <Info label="Količina" value={nalog?.kol ? Number(nalog.kol).toLocaleString("sr-RS") + " m" : "—"} />
             </div>
-
             <PlanRezanjaNalog nalog={nalog} msg={msg} />
-
             <div style={{marginTop:14,padding:"10px 14px",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12,color:"#64748b"}}>
               Nalog izradio: _________________________ &nbsp;&nbsp; Nalog odobrio: _________________________
             </div>
           </div>
         )}
-
+        
         {tab === "mat" && (
           <div style={card}>
             <h2 style={{marginTop:0}}>📦 Materijal</h2>
