@@ -1,13 +1,6 @@
-// PlanRezanjaNalog.jsx - PLACEHOLDER
-// Plan rezanja za nalog
+import { createClient } from '@supabase/supabase-js'
 
-export default function PlanRezanjaNalog({ nalog, msg }) {
-  return (
-    <div style={{padding:14,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,marginTop:14}}>
-      <h3 style={{marginTop:0}}>📋 Plan rezanja</h3>
-      <p style={{color:"#64748b",fontSize:13}}>
-        NAPOMENA: Uploaduj mi PlanRezanjaNalog.jsx za kompletan plan rezanja.
-      </p>
-    </div>
-  );
-}
+const SUPABASE_URL = 'https://xmlnvxzdytuybguirjgz.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtbG52eHpkeXR1eWJndWlyamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODA4OTUsImV4cCI6MjA5MjI1Njg5NX0.KnKwY_UXiUj5VwcoYQ-hLdSy4UaQdj_KwbiPdbgXKzg'
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
