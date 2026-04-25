@@ -7,9 +7,9 @@ import Magacin, {MobilniMagacin} from "./Magacin.jsx";
 import KalkulatorKese2 from "./KalkulatorKese2.jsx";
 import PracenjeNaloga from "./PracenjeNaloga.jsx";
 import NalogFolija from "./NalogFolija.jsx";
+import NalogKesaView from "./NalogKesaView.jsx";
+import NalogSpulnaView from "./NalogSpulnaView.jsx";
 import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
-import AIpanel from "./AIpanel.jsx";
-import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1434,6 +1434,7 @@ export default function App() {
   const [lPass,setLPass]=useState("");
   const [lErr,setLErr]=useState("");
   const [pregNalog,setPregNalog]=useState(null);
+  const [otvorenRadniNalog,setOtvorenRadniNalog]=useState(null);
   const [pregPonuda,setPregPonuda]=useState(null);
   const [stampa,setStampa]=useState(null);
   const [uploading,setUploading]=useState(null);
@@ -1495,6 +1496,20 @@ export default function App() {
   async function obrisiFajl(nalogId,tipFajla){
     try{const {error}=await supabase.from('nalozi').update({["link_"+tipFajla]:null}).eq('id',nalogId);if(error)throw error;msg("Fajl obrisan");}
     catch(e){msg("Greska: "+e.message,"err");}
+  }
+
+  function otvoriRadniNalogPoTipu(nalog){
+    var tipNaloga = nalog.tip || "folija";
+    var nazivNaloga = (nalog.naziv || "").toLowerCase();
+    var tip = "folija";
+
+    if(tipNaloga === "kesa") tip = "kesa";
+    else if(tipNaloga === "spulna") tip = "spulna";
+    else if(nazivNaloga.includes("spuln")) tip = "spulna";
+    else if(nazivNaloga.includes("kesa")) tip = "kesa";
+    else tip = "folija";
+
+    setOtvorenRadniNalog({ tip: tip, nalog: nalog });
   }
 
   async function odbijPonudu(id){
@@ -1569,8 +1584,6 @@ export default function App() {
             {k:"novi_nalog",l:"Nalog iz baze",i:"⚡"},
             {k:"baza",l:"Baza proizvoda",i:"📦"},
             {k:"magacin",l:"Magacin",i:"🏭"},
-            {k:"ai",l:"AI asistent",i:"🤖"},
-            {k:"secenje",l:"Sečenje",i:"🧠"},
       ];
   if(user.uloga==="admin")nav.push({k:"pod",l:"Podešavanja",i:"⚙️"});
 
@@ -1578,6 +1591,9 @@ export default function App() {
     <div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"'Segoe UI',system-ui,sans-serif",color:"#1e293b",display:"flex"}}>
       {notif&&<Notif msg={notif.msg} tip={notif.tip}/>}
       {stampa&&<PrintA4 data={stampa} onClose={function(){setStampa(null);}}/>}
+      {otvorenRadniNalog && otvorenRadniNalog.tip==="folija" && <NalogFolija nalog={otvorenRadniNalog.nalog} onClose={function(){setOtvorenRadniNalog(null);}} msg={msg}/>}
+      {otvorenRadniNalog && otvorenRadniNalog.tip==="kesa" && <NalogKesaView nalog={otvorenRadniNalog.nalog} onClose={function(){setOtvorenRadniNalog(null);}} msg={msg}/>}
+      {otvorenRadniNalog && otvorenRadniNalog.tip==="spulna" && <NalogSpulnaView nalog={otvorenRadniNalog.nalog} onClose={function(){setOtvorenRadniNalog(null);}} msg={msg}/>}
 
       {/* SIDEBAR */}
       <div style={{width:210,background:"#0f172a",display:"flex",flexDirection:"column",flexShrink:0,minHeight:"100vh"}}>
@@ -1698,14 +1714,7 @@ export default function App() {
                         {["Ceka","U toku","Završeno"].map(function(s){return <option key={s} value={s}>{s}</option>;})}
                       </select>
                       {/* Dugme za otvaranje naloga po tipu */}
-                      <button onClick={function(){
-                        var tipNaloga = pregNalog.tip || "folija";
-                        var nazivNaloga = pregNalog.naziv || "";
-                        var tip = "folija";
-                        if(tipNaloga==="kesa") tip="kesa";
-                        else if(tipNaloga==="spulna") tip="spulna";
-                        else if(nazivNaloga.toLowerCase().includes("perf")) tip="perforacija";
-                      }} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#8b5cf6",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                      <button onClick={function(){otvoriRadniNalogPoTipu(pregNalog);}} style={{padding:"8px 16px",borderRadius:8,border:"none",background:"#8b5cf6",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>
                         📄 Otvori radni nalog
                       </button>
                     </div>
@@ -1839,8 +1848,6 @@ export default function App() {
 
         {/* MAGACIN */}
         {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
-        {page==="ai"&&<AIpanel card={card}/>}
-        {page==="secenje"&&<AIsecenjeOptimizer card={card} inp={inp} lbl={lbl} msg={msg}/>}
         {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
         {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
 
