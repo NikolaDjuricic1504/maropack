@@ -1,1 +1,39 @@
-:root{font-family:Arial,sans-serif;background:#eef2f7;color:#172033}*{box-sizing:border-box}body{margin:0}.app{display:flex;min-height:100vh}.sidebar{width:260px;background:#0f172a;color:white;padding:20px}.logo{font-size:24px;font-weight:800;margin-bottom:6px}.sub{color:#cbd5e1;font-size:13px;margin-bottom:20px}.nav{width:100%;border:0;border-radius:12px;padding:12px;margin-bottom:8px;text-align:left;cursor:pointer;background:transparent;color:#e2e8f0}.nav.active,.nav:hover{background:#334155;color:white}.main{flex:1;padding:24px}.card{background:white;border-radius:18px;padding:20px;box-shadow:0 8px 24px rgba(15,23,42,.08);margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}label{font-weight:700}input,textarea,select{border:1px solid #cbd5e1;border-radius:12px;padding:11px;background:#f8fafc}button.primary{background:#2563eb;color:white;border:0;border-radius:12px;padding:11px 16px;font-weight:700;cursor:pointer}.badge{display:inline-block;padding:5px 10px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:800;font-size:12px}table{width:100%;border-collapse:collapse}td,th{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left}.preview{background:#f8fafc;border:1px solid #cbd5e1;border-radius:14px;padding:14px;white-space:pre-wrap}@media(max-width:800px){.app{flex-direction:column}.sidebar{width:100%}}
+export function parseUpit(text) {
+  const safeText = text || "";
+  const lower = safeText.toLowerCase();
+
+  const sirinaMatch = safeText.match(/(\d{2,4})\s?(mm|milimetara)/i);
+  const dimMatch = safeText.match(/(\d{2,4})\s?[x×]\s?(\d{2,4})/i);
+  const kgMatch = safeText.match(/(\d+(?:[.,]\d+)?)\s?kg/i);
+  const komMatch = safeText.match(/(\d+(?:[.,]\d+)?)\s?(kom|komada|pcs)/i);
+  const m2Match = safeText.match(/(\d+(?:[.,]\d+)?)\s?(m2|m²)/i);
+
+  let materijal = "NEPOZNATO";
+  if (lower.includes("triplex")) materijal = "TRIPLEX";
+  else if (lower.includes("duplex")) materijal = "DUPLEX";
+  else if (lower.includes("bopp")) materijal = "BOPP";
+  else if (lower.includes("cpp")) materijal = "CPP";
+  else if (lower.includes("pet")) materijal = "PET";
+  else if (lower.includes("papir")) materijal = "PAPIR";
+  else if (lower.includes("alu") || lower.includes("alumin")) materijal = "ALU";
+  else if (lower.includes("pe")) materijal = "PE";
+
+  let tip = "FOLIJA";
+  if (lower.includes("kesa") || lower.includes("kese")) tip = "KESA";
+  if (lower.includes("spulna") || lower.includes("špulna")) tip = "ŠPULNA";
+
+  return {
+    kupac: "",
+    tip,
+    materijal,
+    sirina: sirinaMatch ? Number(sirinaMatch[1].replace(",", ".")) : "",
+    dimenzijaSirina: dimMatch ? Number(dimMatch[1]) : "",
+    dimenzijaVisina: dimMatch ? Number(dimMatch[2]) : "",
+    kolicinaKg: kgMatch ? Number(kgMatch[1].replace(",", ".")) : "",
+    kolicinaKom: komMatch ? Number(komMatch[1].replace(",", ".")) : "",
+    kolicinaM2: m2Match ? Number(m2Match[1].replace(",", ".")) : "",
+    stampa: lower.includes("stampa") || lower.includes("štampa") || lower.includes("print"),
+    perforacija: lower.includes("perforacija") || lower.includes("perforirano"),
+    napomena: safeText
+  };
+}

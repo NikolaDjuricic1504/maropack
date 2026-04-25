@@ -1,39 +1,35 @@
-export function parseUpit(text) {
-  const safeText = text || "";
-  const lower = safeText.toLowerCase();
+const CENE_PO_KG = {
+  BOPP: 2.6, CPP: 2.7, PET: 3.1, PE: 2.4, ALU: 8.5,
+  PAPIR: 1.9, DUPLEX: 3.2, TRIPLEX: 4.2, NEPOZNATO: 3.0
+};
 
-  const sirinaMatch = safeText.match(/(\d{2,4})\s?(mm|milimetara)/i);
-  const dimMatch = safeText.match(/(\d{2,4})\s?[x×]\s?(\d{2,4})/i);
-  const kgMatch = safeText.match(/(\d+(?:[.,]\d+)?)\s?kg/i);
-  const komMatch = safeText.match(/(\d+(?:[.,]\d+)?)\s?(kom|komada|pcs)/i);
-  const m2Match = safeText.match(/(\d+(?:[.,]\d+)?)\s?(m2|m²)/i);
+export function izracunajCenu(data) {
+  const sirina = Number(data?.sirina || data?.dimenzijaSirina || 500);
+  const visina = Number(data?.dimenzijaVisina || 1000);
+  const kom = Number(data?.kolicinaKom || 0);
+  const kgUneto = Number(data?.kolicinaKg || 0);
+  const m2Uneto = Number(data?.kolicinaM2 || 0);
+  const gramaza = data?.materijal === "TRIPLEX" ? 120 : data?.materijal === "DUPLEX" ? 90 : 75;
+  const cenaKg = CENE_PO_KG[data?.materijal] || CENE_PO_KG.NEPOZNATO;
 
-  let materijal = "NEPOZNATO";
-  if (lower.includes("triplex")) materijal = "TRIPLEX";
-  else if (lower.includes("duplex")) materijal = "DUPLEX";
-  else if (lower.includes("bopp")) materijal = "BOPP";
-  else if (lower.includes("cpp")) materijal = "CPP";
-  else if (lower.includes("pet")) materijal = "PET";
-  else if (lower.includes("papir")) materijal = "PAPIR";
-  else if (lower.includes("alu") || lower.includes("alumin")) materijal = "ALU";
-  else if (lower.includes("pe")) materijal = "PE";
+  let m2 = m2Uneto;
+  if (!m2 && kom > 0) m2 = (sirina / 1000) * (visina / 1000) * kom;
 
-  let tip = "FOLIJA";
-  if (lower.includes("kesa") || lower.includes("kese")) tip = "KESA";
-  if (lower.includes("spulna") || lower.includes("špulna")) tip = "ŠPULNA";
+  let kg = kgUneto;
+  if (!kg && m2 > 0) kg = (m2 * gramaza) / 1000;
+  if (!m2 && kg > 0) m2 = (kg * 1000) / gramaza;
+
+  const materijal = kg * cenaKg;
+  const proizvodnja = kg * 0.45;
+  const stampa = data?.stampa ? kg * 0.35 : 0;
+  const perforacija = data?.perforacija ? kg * 0.12 : 0;
+  const ukupno = materijal + proizvodnja + stampa + perforacija;
 
   return {
-    kupac: "",
-    tip,
-    materijal,
-    sirina: sirinaMatch ? Number(sirinaMatch[1].replace(",", ".")) : "",
-    dimenzijaSirina: dimMatch ? Number(dimMatch[1]) : "",
-    dimenzijaVisina: dimMatch ? Number(dimMatch[2]) : "",
-    kolicinaKg: kgMatch ? Number(kgMatch[1].replace(",", ".")) : "",
-    kolicinaKom: komMatch ? Number(komMatch[1].replace(",", ".")) : "",
-    kolicinaM2: m2Match ? Number(m2Match[1].replace(",", ".")) : "",
-    stampa: lower.includes("stampa") || lower.includes("štampa") || lower.includes("print"),
-    perforacija: lower.includes("perforacija") || lower.includes("perforirano"),
-    napomena: safeText
+    sirina, visina, gramaza, cenaKgMaterijala: cenaKg,
+    m2, kg, materijal, proizvodnja, stampa, perforacija,
+    ukupno,
+    cenaKom: kom > 0 ? ukupno / kom : 0,
+    cenaKgUkupno: kg > 0 ? ukupno / kg : 0
   };
 }
