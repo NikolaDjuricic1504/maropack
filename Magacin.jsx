@@ -250,28 +250,15 @@ export function MobilniMagacin({brRolne}) {
 
   useEffect(function(){
     if(!brRolne) { setLoading(false); setGreska("Nema broja rolne!"); return; }
-    
-    // DEBUG: Log šta tražimo
-    console.log("🔍 Tražim rolnu:", brRolne);
-    
-    // PRETRAGA: Pokušaj više mogućih naziva kolona
-    supabase.from("magacin").select("*")
-      .or("br_rolne.eq."+brRolne+",broj.eq."+brRolne+",broj_rolne.eq."+brRolne)
+    supabase.from("magacin").select("*").eq("br_rolne", brRolne).single()
       .then(function(r){
-        console.log("📦 Rezultat pretrage:", r);
-        
-        if(r.data && r.data.length > 0) {
-          setRolna(r.data[0]);
-          setLokacija(r.data[0].palet || "");
-          setNapomena(r.data[0].napomena || "");
+        if(r.data) {
+          setRolna(r.data);
+          setLokacija(r.data.palet || "");
+          setNapomena(r.data.napomena || "");
         } else {
-          setGreska("Rolna '"+brRolne+"' nije pronađena u magacinu. Proverite naziv kolone u bazi!");
+          setGreska("Rolna '"+brRolne+"' nije pronađena u magacinu.");
         }
-        setLoading(false);
-      })
-      .catch(function(err){
-        console.error("❌ Greška:", err);
-        setGreska("Greška baze: " + err.message);
         setLoading(false);
       });
   }, [brRolne]);
