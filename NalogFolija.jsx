@@ -1,6 +1,5 @@
 import { useState } from "react";
 import PlanRezanjaNalog from "./PlanRezanjaNalog.jsx";
-import QRScanner from "./QRScanner.jsx";
 import RadnikPanel from "./RadnikPanel.jsx";
 import { proveriStartProizvodnje } from "./proizvodnjaLock.js";
 
