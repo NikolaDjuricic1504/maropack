@@ -1,104 +1,95 @@
 import { useState } from "react";
 import PlanRezanjaNalog from "./PlanRezanjaNalog.jsx";
-import RadnikPanel from "./RadnikPanel.jsx";
-import { proveriStartProizvodnje } from "./proizvodnjaLock.js";
 
-export default function NalogFolija({ nalog, msg }) {
+export default function NalogFolija({ nalog, onClose, msg }) {
   const [tab, setTab] = useState("rez");
-  const [qr, setQr] = useState("");
-  const [rola, setRola] = useState(null);
-  const [status, setStatus] = useState("");
-  const [dozvola, setDozvola] = useState(false);
-
-  async function startProizvodnja() {
-    const res = await proveriStartProizvodnje(nalog, qr);
-
-    if (!res.ok) {
-      setStatus("❌ " + res.msg);
-      setDozvola(false);
-    } else {
-      setStatus("✅ Dozvoljen rad");
-      setRola(res.rola);
-      setDozvola(true);
-    }
-  }
 
   return (
-    <div style={{ padding: 20 }}>
-
-      <h2>📄 Nalog: {nalog?.ponBr || "—"}</h2>
-
-      {/* TAB */}
-      <div style={{ marginBottom: 20 }}>
-        <button onClick={() => setTab("rez")}>✂️ Rezanje</button>
-        <button onClick={() => setTab("format")}>📦 Formatiranje</button>
-        <button onClick={() => setTab("start")}>🔒 Start</button>
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column"}}>
+      <div style={{background:"#0f172a",padding:"10px 16px",display:"flex",alignItems:"center",gap:10,color:"#fff"}}>
+        <button onClick={onClose} style={{padding:"7px 14px",borderRadius:7,border:"none",background:"#334155",color:"#fff",cursor:"pointer",fontWeight:700}}>
+          ← Nazad
+        </button>
+        <div style={{fontWeight:800, flex:1}}>
+          📄 Radni nalog: {nalog?.ponBr || nalog?.br || "—"} · {nalog?.kupac || "—"}
+        </div>
       </div>
 
-      {/* ================= REZANJE ================= */}
-      {tab === "rez" && (
-        <div style={box}>
-          <h3>✂️ Plan rezanja</h3>
-          <PlanRezanjaNalog nalog={nalog} msg={msg} />
-        </div>
-      )}
+      <div style={{background:"#1e293b",padding:"8px 16px 0",display:"flex",gap:4}}>
+        <button onClick={() => setTab("rez")} style={tabBtn(tab==="rez")}>✂️ Rezanje</button>
+        <button onClick={() => setTab("mat")} style={tabBtn(tab==="mat")}>📦 Materijal</button>
+      </div>
 
-      {/* ================= FORMATIRANJE ================= */}
-      {tab === "format" && (
-        <div style={box}>
-          <h3>📦 Formatiranje</h3>
+      <div style={{flex:1,overflow:"auto",background:"#f1f5f9",padding:20}}>
+        {tab === "rez" && (
+          <div style={card}>
+            <h2 style={{marginTop:0}}>✂️ Nalog za rezanje</h2>
 
-          <input
-            placeholder="QR ili broj rolne (npr R-1001)"
-            value={qr}
-            onChange={(e) => setQr(e.target.value)}
-          />
+            <div style={grid}>
+              <Info label="Broj naloga" value={nalog?.ponBr || nalog?.br || "—"} />
+              <Info label="Kupac" value={nalog?.kupac || "—"} />
+              <Info label="Proizvod" value={nalog?.prod || nalog?.naziv || "—"} />
+              <Info label="Količina" value={nalog?.kol ? Number(nalog.kol).toLocaleString("sr-RS") + " m" : "—"} />
+            </div>
 
-          <button onClick={() => setStatus("➡️ Ovde pozovi izvrsiFormatiranje()")}>
-            Formatiraj
-          </button>
+            <PlanRezanjaNalog nalog={nalog} msg={msg} />
 
-          <div>{status}</div>
-        </div>
-      )}
+            <div style={{marginTop:14,padding:"10px 14px",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12,color:"#64748b"}}>
+              Nalog izradio: _________________________ &nbsp;&nbsp; Nalog odobrio: _________________________
+            </div>
+          </div>
+        )}
 
-      {/* ================= START PROIZVODNJE ================= */}
-      {tab === "start" && (
-        <div style={box}>
-          <h3>🔒 Start proizvodnje</h3>
-
-          <input
-            placeholder="Skeniraj QR rolne"
-            value={qr}
-            onChange={(e) => setQr(e.target.value)}
-          />
-
-          <button onClick={startProizvodnja}>
-            Proveri
-          </button>
-
-          <div style={{ marginTop: 10 }}>{status}</div>
-
-          {dozvola && (
-            <>
-              <div style={{ color: "green", marginTop: 10 }}>
-                ▶️ Proizvodnja dozvoljena
-              </div>
-
-              {/* RADNIK PANEL */}
-              <RadnikPanel nalog={nalog} rola={rola} />
-            </>
-          )}
-        </div>
-      )}
-
+        {tab === "mat" && (
+          <div style={card}>
+            <h2 style={{marginTop:0}}>📦 Materijal</h2>
+            <div style={grid}>
+              <Info label="Broj naloga" value={nalog?.ponBr || nalog?.br || "—"} />
+              <Info label="Kupac" value={nalog?.kupac || "—"} />
+              <Info label="Proizvod" value={nalog?.prod || nalog?.naziv || "—"} />
+              <Info label="Status" value={nalog?.status || "—"} />
+            </div>
+            <p style={{color:"#64748b"}}>Stabilna verzija. Sledeće dodajemo QR, formatiranje, radnike i dashboard jedno po jedno.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-const box = {
-  background: "#fff",
-  padding: 20,
-  borderRadius: 10,
-  marginTop: 10
+function Info({label, value}) {
+  return (
+    <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:10}}>
+      <div style={{fontSize:9,color:"#94a3b8",fontWeight:900,textTransform:"uppercase"}}>{label}</div>
+      <div style={{fontSize:13,fontWeight:800,marginTop:3}}>{value || "—"}</div>
+    </div>
+  );
+}
+
+function tabBtn(active) {
+  return {
+    padding:"8px 16px",
+    borderRadius:"8px 8px 0 0",
+    border:"none",
+    cursor:"pointer",
+    fontSize:12,
+    fontWeight:800,
+    background:active ? "#f1f5f9" : "transparent",
+    color:active ? "#0f172a" : "#94a3b8"
+  };
+}
+
+const card = {
+  background:"#fff",
+  border:"1px solid #e2e8f0",
+  borderRadius:10,
+  padding:18,
+  boxShadow:"0 2px 8px rgba(0,0,0,0.06)"
+};
+
+const grid = {
+  display:"grid",
+  gridTemplateColumns:"repeat(4,1fr)",
+  gap:10,
+  marginBottom:14
 };
