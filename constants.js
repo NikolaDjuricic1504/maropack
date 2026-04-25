@@ -1,5 +1,5 @@
-// Logo Base64 - zameni sa tvojim logom
+// Logo Base64 - zameni sa tvojim pravim logom
 export const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
-// Špulna Base64 - zameni sa tvojom slikom
+// Špulna skica Base64 - zameni sa pravom slikom
 export const SPULNA_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
