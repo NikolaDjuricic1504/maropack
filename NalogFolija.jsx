@@ -514,12 +514,12 @@ export default function NalogFolija({ nalog, onClose, msg }) {
                 <textarea style={{padding:7,background:"#fffbeb",borderRadius:5,border:"1px dashed #fde68a",fontSize:12,color:"#92400e",resize:"vertical",minHeight:44,boxSizing:"border-box"}}
                   placeholder="Operater upisuje zapažanja..."/>
               </G>
-            </Sec>            <PlanRezanjaNalog nalog={nalog} msg={msg} />
-
+            </Sec>
+            <PlanRezanjaNalog nalog={nalog} msg={msg} />
             <Potpis/>
           </Card>
         )}
       </div>
     </div>
   );
-}
+<PlanRezanjaNalog nalog={nalog} />
