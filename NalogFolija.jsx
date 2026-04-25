@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
+import PlanRezanjaNalog from "./PlanRezanjaNalog.jsx";
 
 var QR_URL = function(val) {
   return "https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=" + encodeURIComponent(val);
@@ -520,4 +521,4 @@ export default function NalogFolija({ nalog, onClose, msg }) {
       </div>
     </div>
   );
-}
+<PlanRezanjaNalog nalog={nalog} />
