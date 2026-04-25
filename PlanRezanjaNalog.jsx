@@ -1,12 +1,12 @@
-// PlanRezanjaNalog.jsx - PLACEHOLDER
-// Plan rezanja za nalog
+// PracenjeNaloga.jsx - PLACEHOLDER
+// Praćenje naloga uživo
 
-export default function PlanRezanjaNalog({ nalog, msg }) {
+export default function PracenjeNaloga({ db, setDb, card, inp, lbl, msg, user, TIP_BOJA, TIP_LAB }) {
   return (
-    <div style={{padding:14,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,marginTop:14}}>
-      <h3 style={{marginTop:0}}>📋 Plan rezanja</h3>
-      <p style={{color:"#64748b",fontSize:13}}>
-        NAPOMENA: Uploaduj mi PlanRezanjaNalog.jsx za kompletan plan rezanja.
+    <div style={card}>
+      <h2>🔴 Praćenje naloga</h2>
+      <p style={{color:"#64748b"}}>
+        NAPOMENA: Uploaduj mi PracenjeNaloga.jsx za kompletan prikaz.
       </p>
     </div>
   );
