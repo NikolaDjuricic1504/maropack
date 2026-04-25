@@ -1,12 +1,18 @@
-UBACIVANJE:
+FULL SISTEM PROIZVODNJE
 
-1. Zameni postojeći App.jsx ovim App.jsx iz ZIP-a.
-2. Ubaci NalogSpulnaView.jsx u isti folder gde su App.jsx i NalogFolija.jsx.
-3. Ako već nemaš NalogKesaView.jsx, ubaci i njega iz ZIP-a.
-4. Upload na GitHub / Vercel redeploy.
+SADRŽI:
+✔ Formatiranje sa QR
+✔ Plan rezanja odvojen
+✔ QR kontrolu
+✔ Zaključavanje proizvodnje
+✔ Praćenje radnika
+✔ Dashboard proizvodnje
 
-ŠTA POPRAVLJA:
-- Dugme "Otvori radni nalog" sada stvarno otvara nalog.
-- Ako je tip folija → otvara NalogFolija.
-- Ako je tip kesa → otvara NalogKesaView.
-- Ako je tip spulna → otvara NalogSpulnaView.
+KORACI:
+1. Pokreni database.sql u Supabase
+2. Ubaci sve .js/.jsx fajlove u projekat
+3. Importuj gde treba (App.jsx / Nalog)
+4. Deploy
+
+NAPOMENA:
+Formatiranje i rezanje su ODVOJENI procesi.
