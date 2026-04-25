@@ -1,0 +1,21 @@
+OVO JE ISPRAVLJENA VERZIJA.
+
+Problem koji je bio u tvom uploadu:
+- CSS je završio u aiParser.js
+- parser je završio u excelKalkulacija.js
+- kalkulacija je bila pomešana sa AIponuda.jsx
+- DashboardProizvodnja.jsx je imao pogrešan sadržaj
+
+Šta da uradiš:
+1) Raspakuj ZIP.
+2) Uploaduj SVE fajlove u GitHub repo.
+3) Ako GitHub pita da zameni postojeće fajlove, klikni Replace/Commit changes.
+4) Na Vercelu uradi Redeploy.
+
+Uključeno:
+- AI ponuda
+- AI parser upita kupca
+- Excel kalkulacija u JS
+- AI čitanje packing liste iz nalepljenog teksta
+- Potvrda pre dodavanja na stanje
+- Lokalno stanje magacina u browser localStorage
