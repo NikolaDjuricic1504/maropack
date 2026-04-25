@@ -515,11 +515,12 @@ export default function NalogFolija({ nalog, onClose, msg }) {
                   placeholder="Operater upisuje zapažanja..."/>
               </G>
             </Sec>
+
             <PlanRezanjaNalog nalog={nalog} msg={msg} />
+
             <Potpis/>
           </Card>
         )}
       </div>
     </div>
   );
-<PlanRezanjaNalog nalog={nalog} />
