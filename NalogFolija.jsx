@@ -1,522 +1,636 @@
-import { useState, useEffect } from "react";
+// NalogFolija-ENHANCED.jsx - SA PARAMETRIMA I KONTROLNIM TAČKAMA
+import { useState } from "react";
 import { supabase } from "./supabase.js";
 
-var QR_URL = function(val) {
-  return "https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=" + encodeURIComponent(val);
-};
-function QRCode({ text, size }) {
-  var sz = size || 90;
-  return (
-    <div style={{ background: "#fff", borderRadius: 5, padding: 3, display: "inline-block" }}>
-      <img src={QR_URL(text)} width={sz} height={sz} alt="QR" style={{ display: "block" }} />
-    </div>
-  );
-}
+export default function NalogFolijaEnhanced({nalog, onClose, msg}) {
+  const [parametri, setParametri] = useState({
+    // Grafika i štampa
+    grafika: nalog.mats?.grafika || "Nov posao",
+    stm: nalog.mats?.stm || "Flexo",
+    brBoja: nalog.mats?.brBoja || "4",
+    smer: nalog.mats?.smer || "Desno",
+    obimValjka: nalog.mats?.obimValjka || "",
+    hilzna: nalog.mats?.hilzna || "76",
+    
+    // Perforacija
+    tipPerf: nalog.mats?.tipPerf || "",
+    oblikPerf: nalog.mats?.oblikPerf || "Fina (mikro)",
+    razmakPerf: nalog.mats?.razmakPerf || "",
+    brzinaPerf: nalog.mats?.brzinaPerf || "120",
+    
+    // Rezanje
+    secivo: nalog.mats?.secivo || "Zilet",
+    stranaRez: nalog.mats?.stranaRez || "Stampa spolja",
+    rezBrTraka: nalog.mats?.rezBrTraka || "",
+    precnikRolne: nalog.mats?.precnikRolne || "do 600mm",
+    duzinaRolne: nalog.mats?.duzinaRolne || "5000",
+    
+    // Dodatno
+    korona: nalog.mats?.korona || "Ne",
+    obelezavanje: nalog.mats?.obelezavanje || "Crvena traka",
+    pakovanjeRolni: nalog.mats?.pakovanjeRolni || "Svaka pojedinacno",
+    paleta: nalog.mats?.paleta || "Euro paleta",
+    
+    // Lepak (ako ima kasiranje)
+    tipLepka: nalog.mats?.tipLepka || "PU solventni",
+    lepakOdnos: nalog.mats?.lepakOdnos || "3:1",
+    lepakNanos: nalog.mats?.lepakNanos || "3,5"
+  });
 
-var f = function(n) { return (+n||0).toLocaleString("sr-RS"); };
-var dnow = function() { return new Date().toLocaleDateString("sr-RS"); };
+  const [kontrolneTacke, setKontrolneTacke] = useState([
+    {id:1, naziv:"Priprema materijala", zavrseno:false, vreme:null, radnik:null},
+    {id:2, naziv:"Podešavanje mašine", zavrseno:false, vreme:null, radnik:null},
+    {id:3, naziv:"Test otisak", zavrseno:false, vreme:null, radnik:null},
+    {id:4, naziv:"Proizvodnja - prva polovina", zavrseno:false, vreme:null, radnik:null},
+    {id:5, naziv:"Međukontro la kvaliteta", zavrseno:false, vreme:null, radnik:null},
+    {id:6, naziv:"Proizvodnja - druga polovina", zavrseno:false, vreme:null, radnik:null},
+    {id:7, naziv:"Završna kontrola", zavrseno:false, vreme:null, radnik:null},
+    {id:8, naziv:"Pakovanje", zavrseno:false, vreme:null, radnik:null}
+  ]);
 
-var MAT_GUSTOCA = {
-  "BOPP":0.905,"BOPP SEDEF":0.65,"OPP":0.905,"CPP":0.905,
-  "PET":1.38,"PA":1.14,"LDPE":0.92,"ALU":2.71,"FXC":0.92,"FXPU":0.92,"FXCB":0.92
-};
+  const [activeTab, setActiveTab] = useState("parametri");
 
-function Hdr({ naslov, brN, suffix, boja, kupac, datum, datumIsp }) {
-  var url = window.location.origin + "?ponbr=" + encodeURIComponent(brN + suffix);
-  return (
-    <div style={{ background: boja, color: "#fff", padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <div>
-        <div style={{ fontSize: 8, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Maropack d.o.o. — Radni nalog</div>
-        <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 2 }}>{naslov}</div>
-        <div style={{ fontSize: 10, color: "#cbd5e1" }}>
-          <b style={{ color: "#fbbf24" }}>{brN}{suffix}</b>
-          &nbsp;·&nbsp; {kupac} &nbsp;·&nbsp; {datum}
-          {datumIsp && <>&nbsp;·&nbsp; Isporuka: <b style={{ color: "#fde68a" }}>{datumIsp}</b></>}
-        </div>
-      </div>
-      <div style={{ textAlign: "center", flexShrink: 0 }}>
-        <QRCode text={url} size={80} />
-        <div style={{ fontSize: 8, color: "#94a3b8", marginTop: 2 }}>Skeniraj</div>
-      </div>
-    </div>
-  );
-}
-
-function Sec({ title, children, boja, noBorder }) {
-  return (
-    <div style={{ padding: "8px 14px", borderBottom: noBorder ? "none" : "1px solid #e8edf3" }}>
-      <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, color: boja || "#94a3b8", marginBottom: 7 }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function G({ n, children, gap, mb }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "repeat("+(n||4)+",1fr)", gap: gap||8, marginBottom: mb||0 }}>{children}</div>;
-}
-
-function P({ label, val, boja, big }) {
-  var bg="#f8fafc",cl="#1e293b",bc="#e2e8f0";
-  if(boja==="plava"){bg="#eff6ff";cl="#1e40af";bc="#bfdbfe";}
-  if(boja==="zelena"){bg="#f0fdf4";cl="#166534";bc="#bbf7d0";}
-  if(boja==="zuta"){bg="#fefce8";cl="#854d0e";bc="#fde68a";}
-  if(boja==="crvena"){bg="#fef2f2";cl="#991b1b";bc="#fecaca";}
-  if(boja==="ljubicasta"){bg="#f5f3ff";cl="#5b21b6";bc="#ddd6fe";}
-  return (
-    <div style={{ display:"flex",flexDirection:"column",gap:2 }}>
-      <div style={{ fontSize:9,color:"#94a3b8" }}>{label}</div>
-      <div style={{ fontSize:big?14:12,fontWeight:600,padding:"4px 7px",background:bg,color:cl,borderRadius:5,border:"1px solid "+bc,minHeight:26 }}>{val||"—"}</div>
-    </div>
-  );
-}
-
-function Potpis() {
-  return (
-    <div style={{ padding:"7px 14px",background:"#f8fafc",borderTop:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",fontSize:10,color:"#94a3b8" }}>
-      <span>Nalog izradio: _________________________ &nbsp; Datum: ___________</span>
-      <span>Nalog odobrio: _________________________</span>
-    </div>
-  );
-}
-
-function LinkPolje({ label, val, setVal }) {
-  return (
-    <div style={{ marginBottom:8 }}>
-      <div style={{ fontSize:9,color:"#94a3b8",marginBottom:3 }}>{label}</div>
-      <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-        <input style={{ flex:1,padding:"4px 8px",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12 }}
-          value={val} placeholder="https://..." onChange={function(e){setVal(e.target.value);}} />
-        {val && <a href={val} target="_blank" rel="noopener noreferrer"
-          style={{ padding:"4px 10px",borderRadius:5,background:"#1d4ed8",color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none",whiteSpace:"nowrap" }}>Otvori →</a>}
-      </div>
-    </div>
-  );
-}
-
-function RolnaBox({ label, boja, tip, deb, sirina, rolna, loading, zaRadM }) {
-  var url = rolna ? window.location.origin + "?rolna=" + encodeURIComponent(rolna.br_rolne) : "";
-  var kg = 0;
-  if(rolna && tip && deb && zaRadM) {
-    var g = MAT_GUSTOCA[tip.split(" ")[0]] || 0.91;
-    kg = Math.round(+deb * g * +sirina/1000 * +zaRadM/1000);
-  }
-  return (
-    <div style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 10px",
-      background:rolna?"#f0fdf4":"#fef2f2",borderRadius:7,
-      border:"1px solid "+(rolna?"#bbf7d0":"#fecaca"),marginBottom:6 }}>
-      {loading ? (
-        <div style={{ fontSize:11,color:"#94a3b8" }}>⏳ Tražim...</div>
-      ) : rolna ? (
-        <>
-          <div style={{ flexShrink:0,textAlign:"center" }}>
-            <QRCode text={url} size={62} />
-            <div style={{ fontSize:8,color:"#64748b",marginTop:2 }}>Rolna QR</div>
-          </div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:10,fontWeight:700,color:boja||"#64748b",marginBottom:2 }}>{label}</div>
-            <div style={{ fontSize:13,fontWeight:800,color:"#166534" }}>{tip} {deb>0?deb+"µ":""} — {sirina}mm</div>
-            <div style={{ fontSize:12,fontWeight:700,color:"#1d4ed8",marginTop:1 }}>{rolna.br_rolne}</div>
-            <div style={{ fontSize:11,color:"#64748b",marginTop:1 }}>
-              Ostalo: <b>{f(rolna.metraza_ost||rolna.metraza)}m</b>
-              {rolna.kg_neto>0&&<> · <b>{rolna.kg_neto}kg</b></>}
-              {rolna.palet&&<> · <b style={{color:"#f59e0b"}}>{rolna.palet}</b></>}
-              {rolna.lot&&<> · LOT: <b>{rolna.lot}</b></>}
-            </div>
-            {kg>0&&<div style={{ fontSize:11,color:"#7c3aed",marginTop:1 }}>Potrebno za nalog: <b>~{f(kg)}kg</b></div>}
-          </div>
-          <div style={{ flexShrink:0 }}>
-            <div style={{ fontFamily:"monospace",fontSize:7,background:"#fff",padding:"3px 6px",borderRadius:3,border:"1px solid #e2e8f0",letterSpacing:2,color:"#1e293b",maxWidth:120,overflow:"hidden" }}>
-              ||| {rolna.br_rolne} |||
-            </div>
-            <div style={{ fontSize:8,color:"#64748b",textAlign:"center",marginTop:2 }}>Bar kod</div>
-          </div>
-        </>
-      ) : (
-        <>
-          <div style={{ width:62,height:62,background:"#fecaca",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,flexShrink:0 }}>⚠️</div>
-          <div>
-            <div style={{ fontSize:10,fontWeight:700,color:"#991b1b",marginBottom:2 }}>{label}</div>
-            <div style={{ fontSize:13,fontWeight:700,color:"#991b1b" }}>{tip} {deb>0?deb+"µ":""} — {sirina}mm</div>
-            <div style={{ fontSize:12,color:"#991b1b",marginTop:2 }}>Nema rolne {sirina}–{+sirina+25}mm u magacinu!</div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-export default function NalogFolija({ nalog, onClose, msg }) {
-  var [tab, setTab] = useState("mat");
-  var [rolne, setRolne] = useState([]);
-  var [loadingRolne, setLoadingRolne] = useState(true);
-  var [datumIsp, setDatumIsp] = useState("");
-  var [brKomInput, setBrKomInput] = useState("");
-  var [notes, setNotes] = useState({});
-  var [links, setLinks] = useState({ stm:"", kas:"", prf:"", final:"" });
-
-  // Izvuci podatke
-  var extra = (nalog.mats && typeof nalog.mats==="object" && !Array.isArray(nalog.mats)) ? nalog.mats : {};
-  var n = Object.assign({}, extra, nalog);
-  var brN = n.ponBr || n.br || "MP-0000";
-  var kupac = n.kupac || "—";
-  var naziv = n.prod || n.naziv || "—";
-  var datum = n.datum || dnow();
-  var datIsp = datumIsp || extra.datumIsp || n.datumIsp || "";
-  var mats = (extra.mats || []).filter(function(m){return m&&m.tip;});
-  var sir = +(extra.sir||n.sir||0);
-  var ik  = +(extra.ik||n.ik||sir);
-  var sk  = +(extra.sk||n.sk||10);
-  var nalKom = +(extra.nal||n.nal||0);
-  var brKom = +brKomInput || nalKom;
-  var kolM = n.kol || nalKom*1000 || 0;
-  var zaRadM = brKom>0 ? Math.round(brKom*(1+sk/100)) : Math.round(kolM*(1+sk/100));
-
-  var brKas = mats.reduce(function(s,m){return s+(+m.kas||0);},0);
-  var hasSt = mats.some(function(m){return m.stamp;});
-  var hasPerf = !!(extra.tipPerf||n.tipPerf);
-
-  var TABS = [
-    {k:"mat",l:"📦 Materijal",boja:"#1e3a5f",suffix:"-7"},
-    hasSt&&{k:"stm",l:"🖨️ Štampa",boja:"#1a3a1a",suffix:"-2"},
-    brKas>0&&{k:"kas",l:"🔗 Kaširanje",boja:"#3a1a1a",suffix:"-3"},
-    hasPerf&&{k:"prf",l:"🔵 Perforacija",boja:"#1a1a3a",suffix:"-5"},
-    {k:"rez",l:"✂️ Rezanje",boja:"#1a2e1a",suffix:"-4"},
-  ].filter(Boolean);
-
-  useEffect(function(){
-    if(!ik){setLoadingRolne(false);return;}
-    supabase.from("magacin").select("*")
-      .gte("sirina",ik).lte("sirina",ik+25)
-      .neq("status","Iskorišćeno")
-      .order("sirina")
-      .then(function(r){setRolne(r.data||[]);setLoadingRolne(false);});
-  },[ik]);
-
-  function nadjiRolnu(tip,deb) {
-    if(!tip) return null;
-    var base = tip.split(" ")[0].toUpperCase();
-    var candidates = rolne.filter(function(r){
-      return r.tip && r.tip.toUpperCase().startsWith(base);
+  function toggleKontrolnaTacka(id) {
+    setKontrolneTacke(function(prev) {
+      return prev.map(function(kt) {
+        if (kt.id === id) {
+          return Object.assign({}, kt, {
+            zavrseno: !kt.zavrseno,
+            vreme: !kt.zavrseno ? new Date().toLocaleString("sr-RS") : null,
+            radnik: !kt.zavrseno ? (nalog.radnik || "nepoznat") : null
+          });
+        }
+        return kt;
+      });
     });
-    if(deb && candidates.length>1) {
-      var byDeb = candidates.find(function(r){return Math.abs(+r.deb-+deb)<=3;});
-      if(byDeb) return byDeb;
+  }
+
+  async function sacuvajParametre() {
+    try {
+      var res = await supabase
+        .from("nalozi")
+        .update({
+          mats: Object.assign({}, nalog.mats || {}, parametri)
+        })
+        .eq("id", nalog.id);
+      
+      if (res.error) throw res.error;
+      msg("✅ Parametri sačuvani!");
+    } catch(e) {
+      msg("Greška: " + e.message, "err");
     }
-    return candidates[0] || null;
   }
 
-  function kgMat(m) {
-    var g = MAT_GUSTOCA[m.tip] || MAT_GUSTOCA[m.tip.split(" ")[0]] || 0.91;
-    return Math.round(+m.deb * g * ik/1000 * zaRadM/1000);
-  }
-
-  function setLink(k,v){ setLinks(function(l){return Object.assign({},l,{[k]:v});}); }
-  function setNote(k,v){ setNotes(function(m){return Object.assign({},m,{[k]:v});}); }
-
-  var aktTab = TABS.find(function(t){return t.k===tab;})||TABS[0];
-
-  var Card = function({children}){
-    return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",marginBottom:20,boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>{children}</div>;
+  var inp = {
+    width:"100%",
+    padding:"9px 12px",
+    borderRadius:8,
+    border:"1px solid #e2e8f0",
+    fontSize:13,
+    color:"#1e293b",
+    background:"#f8fafc",
+    outline:"none",
+    boxSizing:"border-box"
   };
 
+  var lbl = {
+    fontSize:10,
+    fontWeight:700,
+    color:"#64748b",
+    textTransform:"uppercase",
+    letterSpacing:0.6,
+    marginBottom:4,
+    display:"block"
+  };
+
+  var card = {
+    background:"#fff",
+    borderRadius:12,
+    padding:20,
+    boxShadow:"0 1px 3px rgba(0,0,0,0.04)",
+    border:"1px solid #e8edf3"
+  };
+
+  // Progress
+  var zavrseneKT = kontrolneTacke.filter(function(kt){ return kt.zavrseno; }).length;
+  var progressProcenat = (zavrseneKT / kontrolneTacke.length) * 100;
+
   return (
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",flexDirection:"column"}}>
-
-      {/* TOP BAR */}
-      <div style={{background:"#0f172a",padding:"10px 16px",display:"flex",alignItems:"center",gap:10,flexShrink:0,flexWrap:"wrap"}}>
-        <button onClick={onClose} style={{padding:"7px 14px",borderRadius:7,border:"none",background:"#334155",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>← Nazad</button>
-        <div style={{color:"#fff",fontWeight:700,fontSize:13,flex:1}}>{naziv} — {kupac} &nbsp;<span style={{color:"#fbbf24"}}>{brN}</span></div>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          <div style={{display:"flex",alignItems:"center",gap:5}}>
-            <span style={{color:"#94a3b8",fontSize:11}}>Isporuka:</span>
-            <input style={{padding:"5px 8px",borderRadius:6,border:"1px solid #475569",background:"#1e293b",color:"#fff",fontSize:12,width:105}}
-              value={datumIsp} placeholder="dd.mm.gggg."
-              onChange={function(e){setDatumIsp(e.target.value);}}/>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:5}}>
-            <span style={{color:"#94a3b8",fontSize:11}}>Kom:</span>
-            <input type="number" style={{padding:"5px 8px",borderRadius:6,border:"1px solid #475569",background:"#1e293b",color:"#fff",fontSize:12,width:75}}
-              value={brKomInput} placeholder={nalKom||""}
-              onChange={function(e){setBrKomInput(e.target.value);}}/>
-            {zaRadM>0&&<span style={{color:"#fbbf24",fontSize:11}}>→ {f(zaRadM)}m</span>}
-          </div>
-          <button onClick={function(){window.print();}} style={{padding:"7px 14px",borderRadius:7,border:"none",background:"#1d4ed8",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>🖨️ Štampaj A4</button>
-        </div>
-      </div>
-
-      {/* TABS */}
-      <div style={{background:"#1e293b",padding:"8px 16px 0",display:"flex",gap:4,flexShrink:0,flexWrap:"wrap"}}>
-        {TABS.map(function(t){
-          return <button key={t.k} onClick={function(){setTab(t.k);}}
-            style={{padding:"8px 16px",borderRadius:"8px 8px 0 0",border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
-              background:tab===t.k?"#f1f5f9":"transparent",color:tab===t.k?"#0f172a":"#94a3b8"}}>{t.l}</button>;
-        })}
-      </div>
-
-      {/* NALOG CONTENT */}
-      <div style={{flex:1,overflow:"auto",background:"#f1f5f9",padding:20}}>
-
-        {/* 1. MATERIJAL */}
-        {tab==="mat"&&(
-          <Card>
-            <Hdr naslov="Nalog za potrebu materijala" brN={brN} suffix="-7" boja="#1e3a5f" kupac={kupac} datum={datum} datumIsp={datIsp}/>
-            <Sec title="Identifikacija">
-              <G n={4} mb={8}><P label="Radni nalog br." val={brN} boja="plava"/><P label="Datum" val={datum}/><P label="Datum isporuke" val={datIsp} boja="zuta"/><P label="Kupac" val={kupac}/></G>
-              <P label="Naziv proizvoda" val={naziv}/>
-            </Sec>
-            <Sec title={"Materijali — magacin "+ik+"–"+(ik+25)+"mm"} boja="#1e3a5f">
-              {mats.length===0&&<div style={{fontSize:12,color:"#94a3b8",padding:8}}>Nema definisanih materijala.</div>}
-              {mats.map(function(m,i){
-                var r=nadjiRolnu(m.tip,m.deb);
-                var label="Materijal "+(i+1)+(m.kas>0?" ("+m.kas+"× kaširan)":"")+(m.stamp?" (štampa)":"")+(m.lak>0?" ("+m.lak+"× lakiran)":"");
-                return <RolnaBox key={i} label={label} boja={["#1e40af","#5b21b6","#854d0e","#9a3412"][i]}
-                  tip={m.tip} deb={m.deb} sirina={ik} rolna={r} loading={loadingRolne} zaRadM={zaRadM}/>;
-              })}
-            </Sec>
-            <Sec title="Količine">
-              <G n={4}><P label="Naručeno (m)" val={f(kolM)}/><P label="Za rad (m)" val={f(zaRadM)} boja="zuta"/><P label="Škart %" val={sk+"%"}/><P label="Idealna širina" val={ik+"mm"} boja="plava"/></G>
-            </Sec>
-            <Sec title="Napomena" noBorder>
-              <textarea style={{width:"100%",minHeight:36,padding:7,background:"#f8fafc",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12,color:"#64748b",resize:"vertical",boxSizing:"border-box"}}
-                value={notes.mat||n.nap||""} onChange={function(e){setNote("mat",e.target.value);}} placeholder="Napomena..."/>
-            </Sec>
-            <Potpis/>
-          </Card>
-        )}
-
-        {/* 2. STAMPA */}
-        {tab==="stm"&&(
-          <Card>
-            <Hdr naslov="Nalog za štampu" brN={brN} suffix="-2" boja="#1a3a1a" kupac={kupac} datum={datum} datumIsp={datIsp}/>
-            <Sec title="Identifikacija">
-              <G n={4} mb={8}><P label="Br. naloga" val={brN} boja="plava"/><P label="Datum" val={datum}/><P label="Rok" val="5 dana od mat." boja="zuta"/><P label="Status" val={n.grafika||"Nov posao"}/></G>
-              <G n={2}><P label="Kupac" val={kupac}/><P label="Naziv" val={naziv}/></G>
-            </Sec>
-            <Sec title="Specifikacija štampe" boja="#1a3a1a">
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                  <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                    {["RB","Naziv","Dim.","Mat.","Kol.(m)","Kol.(kg)","Štampa","Boja","Smer"].map(function(h){
-                      return <th key={h} style={{padding:"5px 7px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;
-                    })}
-                  </tr></thead>
-                  <tbody>
-                    {mats.filter(function(m){return m.stamp;}).map(function(m,i){
-                      return <tr key={i} style={{borderBottom:"1px solid #f1f5f9"}}>
-                        <td style={{padding:"5px 7px",fontWeight:700}}>{i+1}</td>
-                        <td style={{padding:"5px 7px"}}>{naziv}</td>
-                        <td style={{padding:"5px 7px",fontFamily:"monospace"}}>{ik}×{f(zaRadM)}</td>
-                        <td style={{padding:"5px 7px"}}>{m.tip} {m.deb}µ {ik}mm</td>
-                        <td style={{padding:"5px 7px",color:"#059669",fontWeight:700}}>{f(zaRadM)}</td>
-                        <td style={{padding:"5px 7px"}}>{f(kgMat(m))}kg</td>
-                        <td style={{padding:"5px 7px",color:"#7c3aed",fontWeight:700}}>{n.stm||"Flexo"}</td>
-                        <td style={{padding:"5px 7px"}}>{n.brBoja||"4"}</td>
-                        <td style={{padding:"5px 7px"}}>{n.smer||"Desno"}</td>
-                      </tr>;
-                    })}
-                    {mats.filter(function(m){return m.stamp;}).length===0&&(
-                      <tr><td colSpan={9} style={{padding:"8px 7px",color:"#94a3b8",fontStyle:"italic"}}>Nema štampane folije</td></tr>
-                    )}
-                  </tbody>
-                </table>
+    <div style={{
+      position:"fixed",
+      top:0,left:0,right:0,bottom:0,
+      background:"rgba(0,0,0,0.7)",
+      zIndex:9999,
+      display:"flex",
+      alignItems:"center",
+      justifyContent:"center",
+      padding:20,
+      overflow:"auto"
+    }}>
+      <div style={{
+        background:"#fff",
+        borderRadius:16,
+        maxWidth:900,
+        width:"100%",
+        maxHeight:"95vh",
+        overflow:"auto"
+      }}>
+        {/* Header */}
+        <div style={{
+          padding:"16px 24px",
+          borderBottom:"2px solid #e2e8f0",
+          position:"sticky",
+          top:0,
+          background:"#fff",
+          zIndex:1
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div>
+              <div style={{fontSize:20,fontWeight:800,color:"#1d4ed8"}}>
+                📄 {nalog.naziv}
               </div>
-            </Sec>
-            <Sec title="Tehnički parametri">
-              <G n={4} mb={8}><P label="Mašina" val={n.stmMasina||"Flexo 8-boja"}/><P label="Obim valjka" val={n.obimValjka||"—"}/><P label="Strana štampe" val={n.stranaStm||"Spolja"}/><P label="Hilzna" val={(n.hilzna||"76")+"mm"}/></G>
-              <G n={4}><P label="Kliše" val={n.klise||"—"}/><P label="Print proof" val={n.proof||"—"}/><P label="Linijatura" val={n.linijatura||"—"}/><P label="Cena usluge" val="0,50 €/kg"/></G>
-            </Sec>
-            <Sec title="Prateći dokumenti">
-              <LinkPolje label="Link tehničkog crteža / rasklopa" val={links.stm} setVal={function(v){setLink("stm",v);}}/>
-            </Sec>
-            <Sec title="Napomene" noBorder>
-              <textarea style={{width:"100%",minHeight:44,padding:7,background:"#f8fafc",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12,color:"#64748b",resize:"vertical",boxSizing:"border-box"}}
-                value={notes.stm||""} onChange={function(e){setNote("stm",e.target.value);}}
-                placeholder="Obratiti pažnju na kvalitet štampe. Bez ogrebotina, raspasivanja. Rolne ravno namotane."/>
-            </Sec>
-            <Potpis/>
-          </Card>
-        )}
+              <div style={{fontSize:13,color:"#64748b",marginTop:2}}>
+                Ponuda: <b>{nalog.ponBr}</b> · Kupac: <b>{nalog.kupac}</b>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                padding:"8px 16px",
+                borderRadius:8,
+                border:"1px solid #e2e8f0",
+                background:"#fff",
+                color:"#64748b",
+                fontWeight:700,
+                fontSize:13,
+                cursor:"pointer"
+              }}
+            >
+              ✕ Zatvori
+            </button>
+          </div>
 
-        {/* 3. KASIRANJE */}
-        {tab==="kas"&&(
-          <Card>
-            <Hdr naslov="Nalog za kaširanje" brN={brN} suffix="-3" boja="#3a1a1a" kupac={kupac} datum={datum} datumIsp={datIsp}/>
-            <Sec title="Identifikacija">
-              <G n={4} mb={8}><P label="Radni nalog" val={brN} boja="plava"/><P label="Datum" val={datum}/><P label="Kupac" val={kupac}/><P label="Tiraz" val={f(zaRadM)+"m"}/></G>
-              <G n={2}><P label="Naziv" val={naziv}/><P label="Sastav GP" val={mats.map(function(m){return m.tip+" "+m.deb+"µ";}).join(" + ")||"—"}/></G>
-            </Sec>
-            {Array.from({length:Math.max(brKas,1)}).map(function(_,i){
-              var matA=mats[i*2]; var matB=mats[i*2+1];
-              var aktivan=i===0||(matA&&matB);
+          {/* Progress bar */}
+          <div style={{marginTop:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>
+                Napredak: {zavrseneKT}/{kontrolneTacke.length}
+              </span>
+              <span style={{fontSize:11,fontWeight:700,color:"#1d4ed8"}}>
+                {progressProcenat.toFixed(0)}%
+              </span>
+            </div>
+            <div style={{
+              height:8,
+              background:"#f1f5f9",
+              borderRadius:4,
+              overflow:"hidden"
+            }}>
+              <div style={{
+                height:"100%",
+                background:"linear-gradient(90deg, #1d4ed8, #059669)",
+                borderRadius:4,
+                width:progressProcenat+"%",
+                transition:"width 0.3s"
+              }}/>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{display:"flex",gap:8,marginTop:16}}>
+            {[
+              {key:"parametri",label:"⚙️ Parametri"},
+              {key:"kontrola",label:"✅ Kontrolne tačke"},
+              {key:"materijali",label:"🧪 Materijali"}
+            ].map(function(tab){
+              var active = activeTab === tab.key;
               return (
-                <Sec key={i} title={(i+1)+". kaširanje"+(aktivan?"":" — nije potrebno")} boja="#3a1a1a">
-                  <div style={{opacity:aktivan?1:0.4}}>
-                    <G n={4} mb={8}>
-                      <P label="Širina nanosa (mm)" val={aktivan?sir:"—"}/>
-                      <P label="Širina valjka" val={aktivan?(+sir+10):"—"}/>
-                      <P label="Odnos lepka" val={aktivan?(n.lepakOdnos||"3:1"):"—"}/>
-                      <P label="Nanos (g/m²)" val={aktivan?(n.lepakNanos||"3,5"):"—"} boja={aktivan?"zuta":""}/>
-                    </G>
-                    {matA&&<RolnaBox label="Odmotač A" tip={matA.tip} deb={matA.deb} sirina={ik} rolna={nadjiRolnu(matA.tip,matA.deb)} loading={loadingRolne} zaRadM={zaRadM}/>}
-                    {matB&&<RolnaBox label="Odmotač B" tip={matB.tip} deb={matB.deb} sirina={ik} rolna={nadjiRolnu(matB.tip,matB.deb)} loading={loadingRolne} zaRadM={zaRadM}/>}
-                  </div>
-                </Sec>
+                <button
+                  key={tab.key}
+                  onClick={function(){ setActiveTab(tab.key); }}
+                  style={{
+                    padding:"8px 16px",
+                    borderRadius:8,
+                    border: active ? "2px solid #1d4ed8" : "1px solid #e2e8f0",
+                    background: active ? "#eff6ff" : "#fff",
+                    color: active ? "#1d4ed8" : "#64748b",
+                    fontWeight: active ? 800 : 600,
+                    cursor:"pointer",
+                    fontSize:13
+                  }}
+                >
+                  {tab.label}
+                </button>
               );
             })}
-            <Sec title="Parametri">
-              <G n={4}><P label="Tip lepka" val={n.tipLepka||"PU solventni"}/><P label="Max prečnik" val="do 800mm"/><P label="Ulaz" val="Magacin"/><P label="Izlaz" val="Rezanje"/></G>
-            </Sec>
-            <Sec title="Prateći dokumenti">
-              <LinkPolje label="Link PDF parametara kaširanja" val={links.kas} setVal={function(v){setLink("kas",v);}}/>
-            </Sec>
-            <Sec title="Napomene" noBorder>
-              <textarea style={{width:"100%",minHeight:36,padding:7,background:"#f8fafc",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12,color:"#64748b",resize:"vertical",boxSizing:"border-box"}}
-                value={notes.kas||""} onChange={function(e){setNote("kas",e.target.value);}}
-                placeholder="Proveriti adheziju na nastavku svake rolne. Meriti nanos svakih 2.000m."/>
-            </Sec>
-            <Potpis/>
-          </Card>
-        )}
+          </div>
+        </div>
 
-        {/* 4. PERFORACIJA */}
-        {tab==="prf"&&(
-          <Card>
-            <Hdr naslov="Nalog za perforaciju" brN={brN} suffix="-5" boja="#1a1a3a" kupac={kupac} datum={datum} datumIsp={datIsp}/>
-            <Sec title="Identifikacija">
-              <G n={4}><P label="Radni nalog" val={brN} boja="plava"/><P label="Datum" val={datum}/><P label="Kupac" val={kupac}/><P label="Naziv" val={naziv}/></G>
-            </Sec>
-            <Sec title="Parametri perforacije" boja="#1a1a3a">
-              <G n={4} mb={8}>
-                <P label="Tip perforacije" val={n.tipPerf||"—"} boja={n.tipPerf?"plava":""}/>
-                <P label="Oblik" val={n.oblikPerf||"—"}/>
-                <P label="Orijentacija" val={n.orjentPerf||"Poprečna"}/>
-                <P label="Razmak (mm)" val={n.razmakPerf||"—"}/>
-              </G>
-              <G n={4}>
-                <P label="Širina materijala" val={sir+"mm"}/>
-                <P label="Količina (m)" val={f(zaRadM)}/>
-                <P label="Brzina (m/min)" val={n.brzinaPerf||"120"}/>
-                <P label="Vreme izrade" val={n.brzinaPerf?Math.round(zaRadM/+n.brzinaPerf/60*10)/10+"h":"—"} boja="zelena"/>
-              </G>
-            </Sec>
-            <Sec title="Kontrola">
-              <G n={3}>
-                <P label="Sila kidanja (N)" val="Izmeriti i upisati"/>
-                <P label="Tačnost razmaka" val={n.razmakPerf?n.razmakPerf+" ± 0,5mm":"—"}/>
-                <P label="Vizuelna kontrola" val="Svakih 5.000m"/>
-              </G>
-            </Sec>
-            <Sec title="Prateći dokumenti — printaju se uz nalog">
-              <LinkPolje label="🔗 PDF specifikacija perforacije" val={links.prf} setVal={function(v){setLink("prf",v);}}/>
-              <LinkPolje label="🖼️ Izgled finalne rolne / tehnički crtež" val={links.final} setVal={function(v){setLink("final",v);}}/>
-              {(links.prf||links.final)&&(
-                <div style={{display:"flex",gap:8,marginTop:6}}>
-                  {links.prf&&<a href={links.prf} target="_blank" rel="noopener noreferrer"
-                    style={{padding:"6px 12px",borderRadius:6,background:"#1a1a3a",color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none"}}>📄 Spec. perforacije</a>}
-                  {links.final&&<a href={links.final} target="_blank" rel="noopener noreferrer"
-                    style={{padding:"6px 12px",borderRadius:6,background:"#059669",color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none"}}>🖼️ Finalni izgled</a>}
+        {/* Content */}
+        <div style={{padding:24}}>
+          
+          {/* PARAMETRI TAB */}
+          {activeTab === "parametri" && (
+            <div>
+              {/* Grafika i štampa */}
+              <div style={Object.assign({},card,{marginBottom:16})}>
+                <div style={{fontSize:15,fontWeight:800,marginBottom:14,color:"#1d4ed8"}}>
+                  🖨️ Grafika i štampa
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div>
+                    <label style={lbl}>Grafika</label>
+                    <select style={inp} value={parametri.grafika} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{grafika:e.target.value}); });
+                    }}>
+                      <option>Nov posao</option>
+                      <option>Repriza - isti kao prethodni</option>
+                      <option>Repriza - izmena grafike</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Tip štampe</label>
+                    <select style={inp} value={parametri.stm} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{stm:e.target.value}); });
+                    }}>
+                      <option>Flexo</option>
+                      <option>Rotogravura</option>
+                      <option>Bez štampe</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Broj boja</label>
+                    <select style={inp} value={parametri.brBoja} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{brBoja:e.target.value}); });
+                    }}>
+                      {["1","2","3","4","5","6","7","8"].map(function(n){
+                        return <option key={n}>{n}</option>;
+                      })}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Smer odmotavanja</label>
+                    <select style={inp} value={parametri.smer} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{smer:e.target.value}); });
+                    }}>
+                      <option>Desno</option>
+                      <option>Levo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Obim valjka (mm)</label>
+                    <input style={inp} value={parametri.obimValjka} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{obimValjka:e.target.value}); });
+                    }} placeholder="npr. 320"/>
+                  </div>
+                  <div>
+                    <label style={lbl}>Hilzna (mm)</label>
+                    <select style={inp} value={parametri.hilzna} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{hilzna:e.target.value}); });
+                    }}>
+                      <option>76</option>
+                      <option>152</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Perforacija */}
+              <div style={Object.assign({},card,{marginBottom:16})}>
+                <div style={{fontSize:15,fontWeight:800,marginBottom:14,color:"#7c3aed"}}>
+                  🔵 Perforacija
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div>
+                    <label style={lbl}>Tip perforacije</label>
+                    <select style={inp} value={parametri.tipPerf} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{tipPerf:e.target.value}); });
+                    }}>
+                      <option value="">Bez perforacije</option>
+                      <option>Uzdužna</option>
+                      <option>Poprečna</option>
+                      <option>Ukrštena</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Oblik perforacije</label>
+                    <select style={inp} value={parametri.oblikPerf} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{oblikPerf:e.target.value}); });
+                    }}>
+                      <option>Fina (mikro)</option>
+                      <option>Standardna</option>
+                      <option>Gruba</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Razmak (mm)</label>
+                    <input style={inp} value={parametri.razmakPerf} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{razmakPerf:e.target.value}); });
+                    }} placeholder="npr. 100"/>
+                  </div>
+                  <div>
+                    <label style={lbl}>Brzina (m/min)</label>
+                    <input style={inp} value={parametri.brzinaPerf} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{brzinaPerf:e.target.value}); });
+                    }}/>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rezanje */}
+              <div style={Object.assign({},card,{marginBottom:16})}>
+                <div style={{fontSize:15,fontWeight:800,marginBottom:14,color:"#059669"}}>
+                  ✂️ Rezanje
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div>
+                    <label style={lbl}>Tip sečiva</label>
+                    <select style={inp} value={parametri.secivo} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{secivo:e.target.value}); });
+                    }}>
+                      <option>Zilet</option>
+                      <option>Kružno sečivo</option>
+                      <option>Hot-knife</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Strana reza</label>
+                    <select style={inp} value={parametri.stranaRez} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{stranaRez:e.target.value}); });
+                    }}>
+                      <option>Stampa spolja</option>
+                      <option>Stampa unutra</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Broj traka</label>
+                    <input style={inp} value={parametri.rezBrTraka} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{rezBrTraka:e.target.value}); });
+                    }} placeholder="npr. 5"/>
+                  </div>
+                  <div>
+                    <label style={lbl}>Prečnik rolne</label>
+                    <select style={inp} value={parametri.precnikRolne} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{precnikRolne:e.target.value}); });
+                    }}>
+                      <option>do 400mm</option>
+                      <option>do 600mm</option>
+                      <option>do 800mm</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Dužina rolne (m)</label>
+                    <input style={inp} value={parametri.duzinaRolne} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{duzinaRolne:e.target.value}); });
+                    }}/>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dodatno */}
+              <div style={Object.assign({},card,{marginBottom:16})}>
+                <div style={{fontSize:15,fontWeight:800,marginBottom:14,color:"#f59e0b"}}>
+                  ⚡ Dodatne operacije
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div>
+                    <label style={lbl}>Korona tretman</label>
+                    <select style={inp} value={parametri.korona} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{korona:e.target.value}); });
+                    }}>
+                      <option>Ne</option>
+                      <option>Da</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Obeležavanje</label>
+                    <select style={inp} value={parametri.obelezavanje} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{obelezavanje:e.target.value}); });
+                    }}>
+                      <option>Crvena traka</option>
+                      <option>Žuta traka</option>
+                      <option>Bez obeležavanja</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Pakovanje rolni</label>
+                    <select style={inp} value={parametri.pakovanjeRolni} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{pakovanjeRolni:e.target.value}); });
+                    }}>
+                      <option>Svaka pojedinačno</option>
+                      <option>Po 2 u foliji</option>
+                      <option>Po 5 u foliji</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Paleta</label>
+                    <select style={inp} value={parametri.paleta} onChange={function(e){
+                      setParametri(function(p){ return Object.assign({},p,{paleta:e.target.value}); });
+                    }}>
+                      <option>Euro paleta</option>
+                      <option>Američka paleta</option>
+                      <option>Bez palete</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lepak (ako ima kasiranje) */}
+              {nalog.mats && nalog.mats.filter && nalog.mats.filter(function(m){return m.kas>0;}).length > 0 && (
+                <div style={Object.assign({},card,{marginBottom:16})}>
+                  <div style={{fontSize:15,fontWeight:800,marginBottom:14,color:"#1d4ed8"}}>
+                    🔗 Lepak (kasiranje)
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                    <div>
+                      <label style={lbl}>Tip lepka</label>
+                      <select style={inp} value={parametri.tipLepka} onChange={function(e){
+                        setParametri(function(p){ return Object.assign({},p,{tipLepka:e.target.value}); });
+                      }}>
+                        <option>PU solventni</option>
+                        <option>PU solventless</option>
+                        <option>Akrilatni</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={lbl}>Odnos mešanja</label>
+                      <select style={inp} value={parametri.lepakOdnos} onChange={function(e){
+                        setParametri(function(p){ return Object.assign({},p,{lepakOdnos:e.target.value}); });
+                      }}>
+                        <option>3:1</option>
+                        <option>4:1</option>
+                        <option>5:1</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={lbl}>Nanos (g/m²)</label>
+                      <input style={inp} value={parametri.lepakNanos} onChange={function(e){
+                        setParametri(function(p){ return Object.assign({},p,{lepakNanos:e.target.value}); });
+                      }}/>
+                    </div>
+                  </div>
                 </div>
               )}
-            </Sec>
-            <Sec title="Napomena operatera (upisati po završetku)" noBorder>
-              <textarea style={{width:"100%",minHeight:48,padding:7,background:"#fffbeb",borderRadius:5,border:"1px dashed #fde68a",fontSize:12,color:"#92400e",resize:"vertical",boxSizing:"border-box"}}
-                value={notes.prf||""} onChange={function(e){setNote("prf",e.target.value);}} placeholder="Operater upisuje zapažanja..."/>
-            </Sec>
-            <Potpis/>
-          </Card>
-        )}
 
-        {/* 5. REZANJE */}
-        {tab==="rez"&&(
-          <Card>
-            <Hdr naslov="Nalog za rezanje" brN={brN} suffix="-4" boja="#1a2e1a" kupac={kupac} datum={datum} datumIsp={datIsp}/>
-            <Sec title="Identifikacija">
-              <G n={4} mb={8}><P label="Radni nalog" val={brN} boja="plava"/><P label="Datum" val={datum}/><P label="Kupac" val={kupac}/><P label="Kol. za rasecanje" val={f(zaRadM)+"m"}/></G>
-              <G n={2}><P label="Naziv" val={naziv}/><P label="Sastav" val={mats.map(function(m){return m.tip+" "+m.deb+"µ";}).join(" + ")||"—"}/></G>
-            </Sec>
-            <Sec title="Parametri rezanja" boja="#1a2e1a">
-              <G n={4} mb={8}>
-                <P label="Vrsta sečiva" val={n.secivo||"Žilet"}/>
-                <P label="Šir. matične rolne" val={ik+"mm"} boja="plava"/>
-                <P label="Br. traka" val={n.rezBrTraka||"—"}/>
-                <P label="Strana namotavanja" val={n.stranaRez||"Štampa spolja"}/>
-              </G>
-              <G n={4}>
-                <P label="Prečnik fin. rolne" val={n.precnikRolne||"do 600mm"}/>
-                <P label="Dužina fin. rolne" val={(n.duzinaRolne||"5000")+"m"}/>
-                <P label="Korona tretman" val={n.korona||"Ne"}/>
-                <P label="Plan. br. rolni" val={n.rezBrTraka&&n.duzinaRolne?Math.ceil(zaRadM/+n.duzinaRolne)+" rolni":"—"} boja="zelena"/>
-              </G>
-            </Sec>
+              {/* Sacuvaj dugme */}
+              <button
+                onClick={sacuvajParametre}
+                style={{
+                  width:"100%",
+                  padding:14,
+                  borderRadius:10,
+                  border:"none",
+                  background:"#1d4ed8",
+                  color:"#fff",
+                  fontWeight:800,
+                  fontSize:15,
+                  cursor:"pointer"
+                }}
+              >
+                💾 Sačuvaj parametere
+              </button>
+            </div>
+          )}
 
-            {/* Šema rezanja */}
-            {extra.rezFormati&&extra.rezFormati.length>0&&(
-              <Sec title="Šema rezanja" boja="#1a2e1a">
-                <div style={{display:"flex",gap:3,alignItems:"stretch",marginBottom:10,padding:8,background:"#f8fafc",borderRadius:6}}>
-                  <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:3,padding:"4px 6px",color:"#991b1b",fontSize:9,display:"flex",alignItems:"center"}}>otpad</div>
-                  {extra.rezFormati.map(function(fmt,i){
-                    var boje=[["#dbeafe","#93c5fd","#1e40af"],["#dcfce7","#86efac","#166534"],["#f3e8ff","#c4b5fd","#5b21b6"],["#fef3c7","#fcd34d","#92400e"]];
-                    var b=boje[i%boje.length];
-                    return <div key={i} style={{background:b[0],border:"1px solid "+b[1],borderRadius:3,padding:"5px 10px",color:b[2],fontWeight:700,fontSize:11,textAlign:"center",flex:+(fmt.sirina)||1}}>
-                      {"I II III IV V VI".split(" ")[i]} — {fmt.sirina}mm
-                      <div style={{fontSize:9,fontWeight:400,marginTop:2}}>{fmt.metraza?f(fmt.metraza)+"m":""} {fmt.napomena||""}</div>
-                    </div>;
-                  })}
-                  <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:3,padding:"4px 6px",color:"#991b1b",fontSize:9,display:"flex",alignItems:"center"}}>otpad</div>
+          {/* KONTROLNE TAČKE TAB */}
+          {activeTab === "kontrola" && (
+            <div>
+              <div style={Object.assign({},card,{marginBottom:16,background:"#fffbeb",border:"2px solid #fde68a"})}>
+                <div style={{fontSize:14,fontWeight:700,color:"#92400e",marginBottom:8}}>
+                  ℹ️ Kontrolne tačke
                 </div>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                  <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-                    {["Format","Širina","Br. naloga","Kupac / Naziv","Metraža","Br. rolni","Hilzna","Izlaz"].map(function(h){
-                      return <th key={h} style={{padding:"5px 7px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;
-                    })}
-                  </tr></thead>
-                  <tbody>
-                    {extra.rezFormati.map(function(fmt,i){
-                      return <tr key={i} style={{borderBottom:"1px solid #f1f5f9"}}>
-                        <td style={{padding:"5px 7px",fontWeight:700}}>{"I II III IV V VI".split(" ")[i]}</td>
-                        <td style={{padding:"5px 7px"}}>{fmt.sirina}mm</td>
-                        <td style={{padding:"5px 7px",color:"#1d4ed8",fontWeight:600}}>{brN}-{"ABCDE"[i]}</td>
-                        <td style={{padding:"5px 7px"}}>{kupac} · {fmt.naziv||naziv}</td>
-                        <td style={{padding:"5px 7px",color:"#059669",fontWeight:600}}>{fmt.metraza?f(fmt.metraza):"—"}</td>
-                        <td style={{padding:"5px 7px",color:"#059669",fontWeight:600}}>{fmt.brRolni||"—"}</td>
-                        <td style={{padding:"5px 7px"}}>{(n.hilzna||"76")}mm</td>
-                        <td style={{padding:"5px 7px"}}>{fmt.izlaz||"Magacin GP"}</td>
-                      </tr>;
-                    })}
-                  </tbody>
-                </table>
-              </Sec>
-            )}
+                <div style={{fontSize:13,color:"#78716c"}}>
+                  Označavaj svaki korak tokom proizvodnje. Ovo pomaže u praćenju napretka i kvaliteta.
+                </div>
+              </div>
 
-            <Sec title="Pakovanje i označavanje">
-              <G n={4} mb={8}>
-                <P label="Rolne za isporuku" val={n.rolneIsporuka||"Sa nastavkom"}/>
-                <P label="Obeležavanje nast." val={n.obelezavanje||"Crvena traka"} boja="zuta"/>
-                <P label="Pakovanje" val={n.pakovanjeRolni||"Svaka pojedinačno"}/>
-                <P label="Paleta" val={n.paleta||"Euro paleta"}/>
-              </G>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                {["1. Etiketa u hilznu","2. Etiketa na rolnu","3. Etiketa na omot","Upisati kilažu na etiketu"].map(function(x){
-                  return <span key={x} style={{fontSize:10,padding:"2px 8px",borderRadius:4,background:"#eff6ff",color:"#1e40af",border:"1px solid #bfdbfe"}}>{x}</span>;
+              <div style={{display:"grid",gap:10}}>
+                {kontrolneTacke.map(function(kt){
+                  return (
+                    <div
+                      key={kt.id}
+                      style={Object.assign({},card,{
+                        background: kt.zavrseno ? "#f0fdf4" : "#fff",
+                        border: kt.zavrseno ? "2px solid #bbf7d0" : "1px solid #e2e8f0",
+                        cursor:"pointer"
+                      })}
+                      onClick={function(){ toggleKontrolnaTacka(kt.id); }}
+                    >
+                      <div style={{display:"flex",alignItems:"center",gap:12}}>
+                        <div style={{
+                          width:32,
+                          height:32,
+                          borderRadius:"50%",
+                          border: kt.zavrseno ? "none" : "2px solid #e2e8f0",
+                          background: kt.zavrseno ? "#059669" : "#fff",
+                          display:"flex",
+                          alignItems:"center",
+                          justifyContent:"center",
+                          fontSize:16,
+                          flexShrink:0
+                        }}>
+                          {kt.zavrseno ? "✅" : kt.id}
+                        </div>
+                        <div style={{flex:1}}>
+                          <div style={{
+                            fontSize:15,
+                            fontWeight:700,
+                            color: kt.zavrseno ? "#166534" : "#1e293b",
+                            marginBottom:2
+                          }}>
+                            {kt.naziv}
+                          </div>
+                          {kt.zavrseno && kt.vreme && (
+                            <div style={{fontSize:11,color:"#64748b"}}>
+                              {kt.vreme} · {kt.radnik}
+                            </div>
+                          )}
+                        </div>
+                        {!kt.zavrseno && (
+                          <div style={{
+                            padding:"4px 12px",
+                            borderRadius:6,
+                            background:"#f1f5f9",
+                            color:"#64748b",
+                            fontSize:11,
+                            fontWeight:700
+                          }}>
+                            Klikni za završi
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
                 })}
               </div>
-            </Sec>
+            </div>
+          )}
 
-            <Sec title="Prateći dokumenti">
-              <LinkPolje label="🖼️ Izgled finalne rolne" val={links.final} setVal={function(v){setLink("final",v);}}/>
-            </Sec>
+          {/* MATERIJALI TAB */}
+          {activeTab === "materijali" && (
+            <div>
+              {nalog.mats && nalog.mats.length > 0 ? (
+                <div style={{display:"grid",gap:12}}>
+                  {nalog.mats.filter(function(m){return m.tip;}).map(function(m,i){
+                    var BOJE = ["#1d4ed8","#7c3aed","#0891b2","#059669"];
+                    var SLOJ = ["A","B","C","D"];
+                    return (
+                      <div key={i} style={Object.assign({},card,{
+                        background:BOJE[i]+"10",
+                        border:"2px solid "+BOJE[i]+"40"
+                      })}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                          <span style={{
+                            width:32,
+                            height:32,
+                            borderRadius:"50%",
+                            background:BOJE[i],
+                            color:"#fff",
+                            display:"flex",
+                            alignItems:"center",
+                            justifyContent:"center",
+                            fontSize:16,
+                            fontWeight:800
+                          }}>
+                            {SLOJ[i]}
+                          </span>
+                          <div>
+                            <div style={{fontSize:16,fontWeight:800,color:BOJE[i]}}>
+                              {m.tip} {m.deb}µ
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+                          {m.kas > 0 && (
+                            <span style={{fontSize:13,color:"#475569"}}>
+                              🔗 <b>{m.kas}x</b> kasiranje
+                            </span>
+                          )}
+                          {m.lak > 0 && (
+                            <span style={{fontSize:13,color:"#475569"}}>
+                              ✨ <b>{m.lak}x</b> lakiranje
+                            </span>
+                          )}
+                          {m.stamp && (
+                            <span style={{fontSize:13,color:"#475569"}}>
+                              🖨️ štampa
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={Object.assign({},card,{textAlign:"center",padding:40,color:"#94a3b8"})}>
+                  <div style={{fontSize:36,marginBottom:10}}>📦</div>
+                  <div>Nema podataka o materijalima</div>
+                </div>
+              )}
+            </div>
+          )}
 
-            <Sec title="Napomena / Napomena operatera" noBorder>
-              <G n={2}>
-                <textarea style={{padding:7,background:"#f8fafc",borderRadius:5,border:"1px solid #e2e8f0",fontSize:12,color:"#64748b",resize:"vertical",minHeight:44,boxSizing:"border-box"}}
-                  value={notes.rez||n.nap||""} onChange={function(e){setNote("rez",e.target.value);}} placeholder="Napomena..."/>
-                <textarea style={{padding:7,background:"#fffbeb",borderRadius:5,border:"1px dashed #fde68a",fontSize:12,color:"#92400e",resize:"vertical",minHeight:44,boxSizing:"border-box"}}
-                  placeholder="Operater upisuje zapažanja..."/>
-              </G>
-            </Sec>
-            <Potpis/>
-          </Card>
-        )}
+        </div>
       </div>
     </div>
   );
