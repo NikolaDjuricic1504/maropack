@@ -4,9 +4,17 @@ import { supabase } from "./supabase.js";
 
 // 📋 HARDCODED PARSERS za poznate formate (brzi i pouzdani)
 
-// 1. PLASTCHIM-T Parser (Bugarska)
+// 1. PLASTCHIM-T / ROSSELLA Parser
 function parsePlastchim(text) {
   var rolne = [];
+  
+  // 🔧 FIX: Ignoriši fakturu - traži samo "Packing list" sekciju
+  var packingStartIndex = text.indexOf("Packing list");
+  if (packingStartIndex > 0) {
+    text = text.substring(packingStartIndex);
+    console.log("✂️ Skipped invoice section, reading only packing list");
+  }
+  
   var lines = text.split("\n");
   var currentPallet = "";
   var currentOrder = "";
@@ -14,24 +22,47 @@ function parsePlastchim(text) {
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i].trim();
     
-    // Pallet number
-    if (line.match(/Pallet:\s*(\d+\.\d+)/)) {
-      currentPallet = line.match(/Pallet:\s*(\d+\.\d+)/)[1];
+    // Skip header lines
+    if (line.includes("Packing list Date:") || 
+        line.includes("Order No:") || 
+        line.includes("Customer:") ||
+        line.includes("PRODUCT:") ||
+        line.includes("TARIC CODE:") ||
+        line.includes("Roll No") ||
+        line.includes("Film Type") ||
+        line.includes("Total Net Weight") ||
+        line.includes("Total Gross Weight") ||
+        line.includes("Total Roll Count")) {
+      
+      // Extract Order Number
+      if (line.includes("Order No:")) {
+        var orderMatch = line.match(/Order No:\s*(\d+)/);
+        if (orderMatch) currentOrder = orderMatch[1];
+      }
+      continue;
     }
     
-    // Order number
-    if (line.match(/Order No.*?(\d+)/)) {
-      currentOrder = line.match(/Order No.*?(\d+)/)[1];
+    // Pallet line: "Pallet: 136180.1 Net weight: 614.00; Gross weight: 670.00; Pallet size: 1700 x 800"
+    if (line.match(/Pallet:\s*([\d.]+)/)) {
+      currentPallet = line.match(/Pallet:\s*([\d.]+)/)[1];
+      continue;
     }
     
-    // Roll data line: 7553927 136180.1 FXC 15 1 560 152 780 28 400 614.00 649.00
-    var rollMatch = line.match(/^(\d{7,8})\s+[\d.]+\s+([A-Z]+)\s+(\d+)\s+(\d{3,4})\s+\d+\s+\d+\s+([\d,]+)\s+([\d.]+)\s+([\d.]+)/);
+    // Net/Gross weight summary lines - skip
+    if (line.match(/^Net Weight:|^Gross Weight:/)) {
+      continue;
+    }
+    
+    // Roll data line: "7553927 136180.1 FXC 15 1 560 152 780 28 400 614.00 649.00"
+    // Format: RollNo PalletRef FilmType Thickness Width ID OD Length NetKg GrossKg
+    var rollMatch = line.match(/^(\d{7,9})\s+[\d.]+\s+([A-Z]+)\s+(\d{1,3})\s+(\d{3,4})\s+\d+\s+\d+\s+([\d\s,]+)\s+([\d.]+)\s+([\d.]+)/);
     
     if (rollMatch) {
       var rollNo = rollMatch[1];
-      var filmType = rollMatch[2] + " " + rollMatch[3];
+      var filmType = rollMatch[2] + " " + rollMatch[3]; // e.g., "FXC 15"
       var width = parseInt(rollMatch[4]);
-      var length = parseInt(rollMatch[5].replace(/,/g, ""));
+      var lengthRaw = rollMatch[5].replace(/\s/g, ""); // Remove spaces
+      var length = parseInt(lengthRaw.replace(/,/g, ""));
       var netKg = parseFloat(rollMatch[6]);
       var grossKg = parseFloat(rollMatch[7]);
       
@@ -45,153 +76,146 @@ function parsePlastchim(text) {
         palet: currentPallet,
         lot: currentOrder,
         dobavljac: "PLASTCHIM-T",
-        format: "Plastchim"
+        format: "Rossella"
       });
+      
+      console.log("✅ Parsed roll:", rollNo, filmType, width + "mm", length + "m");
     }
   }
   
+  console.log("📦 Total rolls parsed:", rolne.length);
   return rolne;
 }
 
-// 2. TAGHLEEF Parser (Mađarska)
-function parseTaghleef(text) {
-  var rolne = [];
-  var lines = text.split("\n");
-  var currentOrder = "";
-  var currentPallet = "";
-  
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i].trim();
-    
-    // Balance order No
-    if (line.match(/Balance order No.*?(\d+\/\w+\s*\/\d+\/\d+)/)) {
-      currentOrder = line.match(/Balance order No.*?(\d+\/\w+\s*\/\d+\/\d+)/)[1];
-    }
-    
-    // Pallet
-    if (line.match(/Plt\.No\.\s*(\d+)/)) {
-      currentPallet = line.match(/Plt\.No\.\s*(\d+)/)[1];
-    }
-    
-    // Reel line: 110949959 122607302003000 NATIVIA NTSS 30 1650 TO 904,0 14700 152 783 1 13.02.2026
-    var reelMatch = line.match(/^(\d{9})\s+\d+\s+([\w\s]+?)\s+([\d,]+)\s+(\d{4,6})\s+\d+\s+\d+/);
-    
-    if (reelMatch) {
-      var reelCode = reelMatch[1];
-      var item = reelMatch[2].trim();
-      var kg = parseFloat(reelMatch[3].replace(",", "."));
-      var length = parseInt(reelMatch[4]);
-      
-      // Extract width from item name (e.g., "NATIVIA NTSS 30 1650 TO")
-      var widthMatch = item.match(/(\d{3,4})\s*TO/);
-      var width = widthMatch ? parseInt(widthMatch[1]) : 0;
-      
-      rolne.push({
-        roll_no: reelCode,
-        tip: item,
-        sirina: width,
-        metraza: length,
-        kg_neto: kg,
-        kg_bruto: kg * 1.05, // Estimate bruto
-        palet: currentPallet,
-        lot: currentOrder,
-        dobavljac: "Taghleef Industries",
-        format: "Taghleef"
-      });
-    }
-  }
-  
-  return rolne;
-}
-
-// 🤖 AI FALLBACK Parser (za nepoznate formate)
-async function parseAI(text) {
+// 🤖 UNIVERZALNI AI PARSER (radi za SVE formate)
+async function parsePackingListUniversal(text) {
   try {
-    // Kratkim AI promptom ekstraktuj strukturu
-    var prompt = `Ekstraktuj podatke o rolnama folije iz ovog packing lista teksta.
+    console.log("🤖 Pokrećem univerzalni AI parser...");
+    
+    var prompt = `Analiziraj ovaj packing list i ekstraktuj podatke o SVIM rolnama/reelovima.
 
-TEKST:
-${text.substring(0, 3000)}
+TEKST PACKING LISTE:
+${text}
 
-Vrati JSON array objekata sa ovim poljima:
-- roll_no: broj rolne
-- tip: tip materijala (npr. BOPP, FXC, NATIVIA)
-- sirina: širina u mm
-- metraza: dužina u metrima
-- kg_neto: neto kg
-- kg_bruto: bruto kg (ako postoji)
-- palet: broj paleta
-- lot: LOT broj ili order broj
-- dobavljac: ime dobavljača
+Traži podatke u ovim formatima:
+- Roll Number / Reel Code / Rola broj (može biti 7-9 cifara, ili kod tipa "110949959")
+- Film Type / Tip materijala (npr. FXC 15, NATIVIA NTSS 30, BOPP, CPP, PET)
+- Width / Širina u mm (npr. 1560, 740, 1650)
+- Length / Dužina u metrima (npr. 28400, 14700)
+- Net Weight / Neto kg
+- Gross Weight / Bruto kg (ako postoji)
+- Pallet Number / Broj paleta
+- LOT / Batch Number
+- Order Number / Broj narudžbine
 
-Vrati samo JSON array, bez dodatnog teksta.`;
+VAŽNO:
+- Ignoriši header/footer linije
+- Ignoriši ukupne sume (Total, Summary)
+- Svaka rolna je JEDAN red u tabeli
+
+Vrati JSON array gde je svaki objekat jedna rolna:
+[
+  {
+    "roll_no": "7553927",
+    "tip": "FXC 15",
+    "sirina": 1560,
+    "metraza": 28400,
+    "kg_neto": 614.00,
+    "kg_bruto": 649.00,
+    "palet": "136180.1",
+    "lot": "136180",
+    "dobavljac": "PLASTCHIM-T"
+  }
+]
+
+Vrati SAMO JSON array, bez markdown formatiranja ili dodatnog teksta.`;
 
     var response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
+        max_tokens: 4000,
         messages: [{ role: "user", content: prompt }]
       })
     });
 
+    if (!response.ok) {
+      throw new Error("API greška: " + response.status);
+    }
+
     var data = await response.json();
     var content = data.content[0].text;
     
-    // Clean JSON response
+    console.log("📥 AI odgovor:", content.substring(0, 200));
+    
+    // Clean i parse JSON
     var jsonMatch = content.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error("AI nije vratio validan JSON");
+    if (!jsonMatch) {
+      console.error("❌ AI nije vratio JSON array");
+      return [];
+    }
     
     var parsed = JSON.parse(jsonMatch[0]);
     
-    // Add format marker
-    parsed.forEach(function(r) {
-      r.format = "AI";
-      r.dobavljac = r.dobavljac || "Nepoznat";
+    console.log("✅ AI parsirao:", parsed.length, "rolni");
+    
+    // Normalizuj podatke i dodaj QR kodove
+    var rolne = parsed.map(function(r, i) {
+      return {
+        roll_no: r.roll_no || r.reel_code || String(Date.now() + i).slice(-6),
+        tip: r.tip || r.film_type || "Nepoznato",
+        sirina: parseInt(r.sirina || r.width || 0),
+        metraza: parseInt(r.metraza || r.length || 0),
+        kg_neto: parseFloat(r.kg_neto || r.net_weight || 0),
+        kg_bruto: parseFloat(r.kg_bruto || r.gross_weight || r.kg_neto * 1.05 || 0),
+        palet: r.palet || r.pallet || "",
+        lot: r.lot || r.batch || r.order || "",
+        dobavljac: r.dobavljac || r.supplier || "Nepoznat",
+        br_rolne: "R-" + new Date().getFullYear() + "-" + (r.roll_no || String(Date.now() + i).slice(-6)),
+        format: "AI Universal"
+      };
     });
     
-    return parsed;
+    return rolne;
+    
   } catch (e) {
-    console.error("AI parsing failed:", e);
+    console.error("❌ AI parsing greška:", e);
     return [];
   }
 }
 
-// 🔍 HYBRID PARSER - pokušava hardcoded, pa AI
+// 🔍 HYBRID PARSER - Rossella first, pa AI fallback
 async function parsePackingList(text) {
-  // 1. Detektuj format
-  var format = "unknown";
+  console.log("📄 Parsing packing list...");
   
-  if (text.includes("PLASTCHIM") || text.includes("Entegra Manufacturing")) {
-    format = "plastchim";
-  } else if (text.includes("Taghleef Industries") || text.includes("NATIVIA")) {
-    format = "taghleef";
+  // 1. Pokušaj Rossella/PLASTCHIM parser (brz)
+  var rolne = parsePlastchim(text);
+  
+  if (rolne.length > 0) {
+    console.log("✅ Rossella parser uspeo! Pronađeno:", rolne.length, "rolni");
+    
+    // Dodaj QR kodove
+    rolne.forEach(function(r, i) {
+      if (!r.br_rolne) {
+        r.br_rolne = "R-" + new Date().getFullYear() + "-" + (r.roll_no || String(Date.now() + i).slice(-6));
+      }
+    });
+    
+    return rolne;
   }
   
-  // 2. Hardcoded parser
-  var rolne = [];
+  // 2. UNIVERZALNI AI Parser za SVE OSTALE formate
+  console.log("⚠️ Rossella parser nije našao rolne");
+  console.log("🤖 Pokrećem UNIVERZALNI AI parser...");
   
-  if (format === "plastchim") {
-    console.log("🔧 Koristim Plastchim parser");
-    rolne = parsePlastchim(text);
-  } else if (format === "taghleef") {
-    console.log("🔧 Koristim Taghleef parser");
-    rolne = parseTaghleef(text);
+  rolne = await parsePackingListUniversal(text);
+  
+  if (rolne.length > 0) {
+    console.log("✅ AI Universal parser uspeo! Pronađeno:", rolne.length, "rolni");
+  } else {
+    console.error("❌ Ni jedan parser nije uspeo!");
   }
-  
-  // 3. AI Fallback ako hardcoded nije našao ništa
-  if (rolne.length === 0) {
-    console.log("🤖 Hardcoded parser nije uspeo, koristim AI...");
-    rolne = await parseAI(text);
-  }
-  
-  // 4. Generate QR codes
-  rolne.forEach(function(r, i) {
-    if (!r.br_rolne) {
-      r.br_rolne = "R-" + new Date().getFullYear() + "-" + (r.roll_no || String(Date.now() + i).slice(-6));
-    }
-  });
   
   return rolne;
 }
