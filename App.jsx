@@ -8,7 +8,7 @@ import KalkulatorKese2 from "./KalkulatorKese2.jsx";
 import PracenjeNaloga from "./PracenjeNaloga.jsx";
 import NalogFolija from "./NalogFolija.jsx";
 import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
-import AIpanel from "./AIpanel.jsx";
+import AIpanel from "./AIpanel-MEGA.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 
 // ===================== MATERIJALI =====================
