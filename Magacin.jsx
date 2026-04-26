@@ -250,58 +250,15 @@ export function MobilniMagacin({brRolne}) {
 
   useEffect(function(){
     if(!brRolne) { setLoading(false); setGreska("Nema broja rolne!"); return; }
-    
-    // 🔍 DEBUG: Prikaži šta tražimo
-    console.log("🔍 MAROPACK DEBUG: Tražim rolnu:", brRolne);
-    console.log("🔍 URL parametar:", window.location.search);
-    
-    // 🛠️ POKUŠAJ 1: Traži direktno po br_rolne
     supabase.from("magacin").select("*").eq("br_rolne", brRolne).single()
-      .then(function(r1){
-        console.log("📦 Rezultat po br_rolne:", r1);
-        
-        if(r1.data) {
-          // ✅ Pronađeno!
-          console.log("✅ PRONAĐENO direktno!", r1.data);
-          setRolna(r1.data);
-          setLokacija(r1.data.palet || "");
-          setNapomena(r1.data.napomena || "");
-          setLoading(false);
+      .then(function(r){
+        if(r.data) {
+          setRolna(r.data);
+          setLokacija(r.data.palet || "");
+          setNapomena(r.data.napomena || "");
         } else {
-          // ⚠️ Nije pronađeno, pokušaj alternativne kolone
-          console.warn("⚠️ Nije pronađeno po br_rolne, probam 'broj' i 'broj_rolne'...");
-          
-          // 🛠️ POKUŠAJ 2: Traži u više kolona odjednom
-          supabase.from("magacin").select("*")
-            .or("broj.eq."+brRolne+",broj_rolne.eq."+brRolne)
-            .then(function(r2){
-              console.log("📦 Rezultat po broj/broj_rolne:", r2);
-              
-              if(r2.data && r2.data.length > 0) {
-                console.log("✅ PRONAĐENO u alternat. koloni!", r2.data[0]);
-                setRolna(r2.data[0]);
-                setLokacija(r2.data[0].palet || "");
-                setNapomena(r2.data[0].napomena || "");
-              } else {
-                // ❌ Definitivno ne postoji
-                console.error("❌ Rolna NIJE PRONAĐENA ni u jednoj koloni!");
-                console.error("Proverite:");
-                console.error("1. Da li kolona u Supabase tabeli 'magacin' postoji?");
-                console.error("2. Da li je vrednost tačna:", brRolne);
-                setGreska("Rolna '"+brRolne+"' nije pronađena. Proveri Supabase tabelu 'magacin' i naziv kolone!");
-              }
-              setLoading(false);
-            })
-            .catch(function(err2){
-              console.error("❌ Greška u alternat. pretrazi:", err2);
-              setGreska("Greška baze (alt): " + err2.message);
-              setLoading(false);
-            });
+          setGreska("Rolna '"+brRolne+"' nije pronađena u magacinu.");
         }
-      })
-      .catch(function(err1){
-        console.error("❌ Greška u osnovnoj pretrazi:", err1);
-        setGreska("Greška baze: " + err1.message);
         setLoading(false);
       });
   }, [brRolne]);
