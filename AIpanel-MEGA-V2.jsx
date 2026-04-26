@@ -192,6 +192,162 @@ export default function AIpanelMEGAv2({card}) {
       }
       
       // ═══════════════════════════════════════════════════════════
+      // 📏 ANALIZA ŠIRINA - Planirano vs Stvarno
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.includes("analiz") && (low.includes("širin") || low.includes("sirin") || low.includes("planirano") || low.includes("stvarno"))) {
+        // Učitaj naloge
+        var rnal = await supabase.from("nalozi").select("*");
+        if(rnal.error) throw rnal.error;
+        
+        // Učitaj magacin (iskorišćene rolne)
+        var rmag = await supabase.from("magacin").select("*").eq("status", "Iskorišćeno");
+        if(rmag.error) throw rmag.error;
+        
+        // Grupiši po TIP + DEBLJINA iz naloga (planirano)
+        var planirano = {};
+        rnal.data.forEach(function(n) {
+          if(n.sir && n.mat && n.deb) {
+            var kljuc = n.mat + " " + n.deb + "µ";
+            if(!planirano[kljuc]) planirano[kljuc] = {
+              tip: n.mat,
+              debljina: n.deb,
+              sirine_planirane: {},
+              count_naloga: 0
+            };
+            
+            // Dodaj širinu iz naloga
+            var sir = parseInt(n.sir);
+            if(!planirano[kljuc].sirine_planirane[sir]) {
+              planirano[kljuc].sirine_planirane[sir] = 0;
+            }
+            planirano[kljuc].sirine_planirane[sir]++;
+            planirano[kljuc].count_naloga++;
+          }
+        });
+        
+        // Grupiši stvarno iskorišćene rolne iz magacina
+        var stvarno = {};
+        rmag.data.forEach(function(r) {
+          // Pokušaj ekstraktovati debljinu iz tipa (npr. "BOPP 20" → 20µ)
+          var tipMatch = String(r.tip || "").match(/([A-Z]+)\s*(\d+)/);
+          if(tipMatch && r.sirina) {
+            var mat = tipMatch[1];
+            var deb = tipMatch[2];
+            var kljuc = mat + " " + deb + "µ";
+            
+            if(!stvarno[kljuc]) stvarno[kljuc] = {
+              tip: mat,
+              debljina: deb,
+              sirine_koriscene: {},
+              count_rolni: 0
+            };
+            
+            var sir = parseInt(r.sirina);
+            if(!stvarno[kljuc].sirine_koriscene[sir]) {
+              stvarno[kljuc].sirine_koriscene[sir] = 0;
+            }
+            stvarno[kljuc].sirine_koriscene[sir]++;
+            stvarno[kljuc].count_rolni++;
+          }
+        });
+        
+        // Kombinuj planirano i stvarno
+        var sviKljucevi = Array.from(new Set([
+          ...Object.keys(planirano),
+          ...Object.keys(stvarno)
+        ])).sort();
+        
+        if(sviKljucevi.length === 0) {
+          result = "⚠️ Nema podataka za analizu širina.\n\nProveri da nalozi i magacin imaju podatke.";
+        } else {
+          result = "📏 ANALIZA ŠIRINA - Planirano vs Stvarno:\n\n";
+          
+          sviKljucevi.slice(0, 15).forEach(function(kljuc) {
+            var plan = planirano[kljuc] || {sirine_planirane: {}, count_naloga: 0};
+            var stv = stvarno[kljuc] || {sirine_koriscene: {}, count_rolni: 0};
+            
+            result += "▸ " + kljuc + ":\n";
+            
+            // Planirane širine
+            var planSirine = Object.keys(plan.sirine_planirane).map(Number).sort(function(a,b){return a-b;});
+            if(planSirine.length > 0) {
+              result += "  📋 Planirano: " + planSirine.map(function(s){
+                return s + "mm (" + plan.sirine_planirane[s] + "x)";
+              }).join(", ") + "\n";
+            } else {
+              result += "  📋 Planirano: —\n";
+            }
+            
+            // Stvarno korišćene širine
+            var stvarnoSirine = Object.keys(stv.sirine_koriscene).map(Number).sort(function(a,b){return a-b;});
+            if(stvarnoSirine.length > 0) {
+              result += "  ✅ Stvarno: " + stvarnoSirine.map(function(s){
+                return s + "mm (" + stv.sirine_koriscene[s] + "x)";
+              }).join(", ") + "\n";
+            } else {
+              result += "  ✅ Stvarno: —\n";
+            }
+            
+            // Analiza razlike
+            if(planSirine.length > 0 && stvarnoSirine.length > 0) {
+              // Proveri poklapanje
+              var razliciteSirine = stvarnoSirine.filter(function(s) {
+                return !planSirine.includes(s);
+              });
+              
+              var razlicitiPlanirani = planSirine.filter(function(s) {
+                return !stvarnoSirine.includes(s);
+              });
+              
+              if(razliciteSirine.length === 0 && razlicitiPlanirani.length === 0) {
+                result += "  ✅ PERFEKTNO poklapanje!\n";
+              } else if(razliciteSirine.length > 0) {
+                result += "  ⚠️ Korišćeno DRUGE širine: " + razliciteSirine.join("mm, ") + "mm\n";
+                
+                // Izračunaj prosečno odstupanje
+                var odstupanja = [];
+                razliciteSirine.forEach(function(stvarnaSir) {
+                  var najbliza = planSirine.reduce(function(prev, curr) {
+                    return Math.abs(curr - stvarnaSir) < Math.abs(prev - stvarnaSir) ? curr : prev;
+                  });
+                  odstupanja.push(Math.abs(stvarnaSir - najbliza));
+                });
+                
+                var prosecnoOdstupanje = odstupanja.reduce(function(a,b){return a+b;}, 0) / odstupanja.length;
+                result += "  📊 Prosečno odstupanje: " + prosecnoOdstupanje.toFixed(1) + "mm\n";
+                
+                // Preporuka
+                if(stvarnoSirine.length > planSirine.length) {
+                  result += "  💡 Preporuka: Standardizuj na " + planSirine[0] + "mm\n";
+                }
+              } else if(razlicitiPlanirani.length > 0) {
+                result += "  ℹ️ Planirano ali nije korišćeno: " + razlicitiPlanirani.join("mm, ") + "mm\n";
+              }
+            } else if(planSirine.length > 0 && stvarnoSirine.length === 0) {
+              result += "  ℹ️ Planirano ali NIJE još iskorišćeno\n";
+            } else if(planSirine.length === 0 && stvarnoSirine.length > 0) {
+              result += "  ⚠️ Korišćeno bez planiranja u nalozima!\n";
+            }
+            
+            result += "\n";
+          });
+          
+          // Summary
+          var ukupnoPlaniranih = Object.keys(planirano).length;
+          var ukupnoStvarnih = Object.keys(stvarno).length;
+          
+          result += "📊 UKUPNO:\n";
+          result += "Planiranih grupa: " + ukupnoPlaniranih + "\n";
+          result += "Stvarno korišćenih grupa: " + ukupnoStvarnih + "\n";
+          
+          if(sviKljucevi.length > 15) {
+            result += "\n(Prikazano prvih 15 od " + sviKljucevi.length + " grupa)";
+          }
+        }
+      }
+      
+      // ═══════════════════════════════════════════════════════════
       // 📅 TREND ANALIZA (potrošnja po mesecima)
       // ═══════════════════════════════════════════════════════════
       
@@ -302,6 +458,9 @@ export default function AIpanelMEGAv2({card}) {
           "📅 TREND:\n" +
           "• Trend potrošnje\n" +
           "• Mesečna statistika\n\n" +
+          "📏 ANALIZA ŠIRINA (NOVO!):\n" +
+          "• Analiza širina\n" +
+          "• Planirano vs stvarno\n\n" +
           "💰 VREDNOST:\n" +
           "• Kolika je vrednost magacina?\n\n" +
           "📦 MAGACIN:\n" +
@@ -374,6 +533,7 @@ export default function AIpanelMEGAv2({card}) {
           "Export statistika",
           "Niske zalihe",
           "Trend potrošnje",
+          "Analiza širina",
           "Vrednost magacina"
         ].map(function(cmd) {
           return (
