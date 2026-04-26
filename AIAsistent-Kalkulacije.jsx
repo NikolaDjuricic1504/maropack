@@ -1,4 +1,4 @@
-// AIasisent-Kalkulacije.jsx - PAMETNI ASISTENT ZA KALKULACIJE
+// AIAsistent-Kalkulacije.jsx - PAMETNI ASISTENT ZA KALKULACIJE
 import { useState } from "react";
 
 export default function AIAsistentKalkulacije({card, inp, lbl, msg}) {
