@@ -11,6 +11,7 @@ import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
 import AIpanel from "./AIpanel-MEGA-V2.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 import Dashboard from "./Dashboard.jsx";
+import BazaProizvoda from "./BazaProizvoda.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
