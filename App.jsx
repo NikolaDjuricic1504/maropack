@@ -10,7 +10,7 @@ import PracenjeNaloga from "./PracenjeNaloga.jsx";
 import NalogFolija from "./NalogFolija.jsx";
 import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
 import AIpanel from "./AIpanel-MEGA-V2.jsx";
-import AIAsistentKalkulacije from "./AIAsistent-Kalkulacije.jsx";
+import AIAsitentKalkulacije from "./AIAsisent-Kalkulacije.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 import Dashboard from "./Dashboard.jsx";
 
