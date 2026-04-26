@@ -9,6 +9,7 @@ import PracenjeNaloga from "./PracenjeNaloga.jsx";
 import NalogFolija from "./NalogFolija.jsx";
 import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
 import AIpanel from "./AIpanel-MEGA-V2.jsx";
+import AIAsistentKalkulacije from "./AIAsistent-Kalkulacije.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 import Dashboard from "./Dashboard.jsx";
 
@@ -1571,6 +1572,7 @@ export default function App() {
             {k:"baza",l:"Baza proizvoda",i:"📦"},
             {k:"magacin",l:"Magacin",i:"🏭"},
             {k:"ai",l:"AI asistent",i:"🤖"},
+            {k:"ai_kalk",l:"AI Kalkulacije",i:"🤖"},
             {k:"secenje",l:"Sečenje",i:"🧠"},
       ];
   if(user.uloga==="admin")nav.push({k:"pod",l:"Podešavanja",i:"⚙️"});
@@ -1791,6 +1793,14 @@ export default function App() {
         {/* MAGACIN */}
         {page==="magacin"&&<Magacin msg={msg} inp={inp} card={card} lbl={lbl} user={user}/>}
         {page==="ai"&&<AIpanel card={card}/>}
+        {page==="ai_kalk" && (
+          <AIAsistentKalkulacije 
+            card={card} 
+            inp={inp} 
+            lbl={lbl} 
+            msg={msg}
+          />
+        )}
         {page==="secenje"&&<AIsecenjeOptimizer card={card} inp={inp} lbl={lbl} msg={msg}/>}
         {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
         {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
