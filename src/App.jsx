@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import DashboardProizvodnja from "./DashboardProizvodnja.jsx";
 import AIponuda from "./AIponuda.jsx";
 import AIPackingLista from "./AIPackingLista.jsx";
+import BazaProizvoda from "./BazaProizvoda.jsx";
 
 function Placeholder({ title }) {
   return (
