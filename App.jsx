@@ -1,4 +1,3 @@
-// force redeploy AI kalkulacije
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase.js";
 import { LOGO_B64, SPULNA_B64 } from "./constants.js";
@@ -10,7 +9,7 @@ import PracenjeNaloga from "./PracenjeNaloga.jsx";
 import NalogFolija from "./NalogFolija.jsx";
 import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
 import AIpanel from "./AIpanel-MEGA-V2.jsx";
-import AIAsitentKalkulacije from "./AIAsisent-Kalkulacije.jsx";
+import AIAsistentKalkulacije from "./AIAsistent-Kalkulacije.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 import Dashboard from "./Dashboard.jsx";
 
