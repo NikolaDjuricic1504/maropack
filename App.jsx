@@ -1,4 +1,4 @@
-// redeploy AI kalkulacije
+// force redeploy AI kalkulacije
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase.js";
 import { LOGO_B64, SPULNA_B64 } from "./constants.js";
