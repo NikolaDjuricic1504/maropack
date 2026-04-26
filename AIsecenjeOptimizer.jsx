@@ -119,57 +119,6 @@ export default function AIsecenjeOptimizer({card, inp, lbl, msg}) {
     if(msg) msg("Plan sečenja izračunat u browseru");
   }
 
-  // 📊 NOVO: Export u Excel
-  async function exportToExcel() {
-    if(!result || !result.plan.length) {
-      if(msg) msg("Nema plana za export!", "err");
-      return;
-    }
-    
-    try {
-      // Učitaj XLSX library dinamički
-      if(!window.XLSX) {
-        var script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-        await new Promise(function(res, rej) {
-          script.onload = res;
-          script.onerror = rej;
-          document.head.appendChild(script);
-        });
-      }
-
-      // Pripremi podatke za Excel
-      var excelData = result.plan.map(function(p, i) {
-        return {
-          "Red": i + 1,
-          "Matična rolna": p.br_rolne,
-          "Tip": p.tip,
-          "Širina mm": p.master,
-          "Metraža m": p.metraza,
-          "Sečenja": p.secenja.join(" + "),
-          "Suma mm": p.suma,
-          "Otpad mm": p.otpad,
-          "Iskorišćenje %": p.iskoriscenje.toFixed(2),
-          "LOT": p.lot,
-          "Lokacija": p.lokacija
-        };
-      });
-
-      // Kreiraj Excel fajl
-      var worksheet = window.XLSX.utils.json_to_sheet(excelData);
-      var workbook = window.XLSX.utils.book_new();
-      window.XLSX.utils.book_append_sheet(workbook, worksheet, "Plan sečenja");
-      
-      // Download
-      var filename = "plan-secenja-" + new Date().toISOString().slice(0,10) + ".xlsx";
-      window.XLSX.writeFile(workbook, filename);
-      
-      if(msg) msg("✅ Excel fajl preuzet: " + filename);
-    } catch(e) {
-      if(msg) msg("Greška pri exportu: " + e.message, "err");
-    }
-  }
-
   var tipovi = Array.from(new Set(rolne.map(function(r){return r.tip;}).filter(Boolean))).sort();
   var ukupnoKg = rolne.reduce(function(s,r){return s+num(r.kg_neto||r.kg||0);},0);
   var ukupnoM = rolne.reduce(function(s,r){return s+num(r.metraza_ost||r.metraza||0);},0);
@@ -211,16 +160,9 @@ export default function AIsecenjeOptimizer({card, inp, lbl, msg}) {
       {result && (
         <div>
           <div style={Object.assign({},card,{background:"#ecfdf5",border:"1px solid #bbf7d0",marginBottom:16})}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:13,color:"#166534",fontWeight:900,textTransform:"uppercase"}}>Rezultat</div>
-                <div style={{fontSize:22,fontWeight:900,color:"#064e3b",marginTop:4}}>Pokriveno {fmt(result.pokriveno)} m od {fmt(result.ukupnoPotrebno)} m</div>
-                <div style={{fontSize:13,color:"#166534",marginTop:4}}>Korišćeno rolni: <b>{result.plan.length}</b> · Ukupan otpad po kombinacijama: <b>{result.otpadMm} mm</b></div>
-              </div>
-              <button onClick={exportToExcel} style={{padding:"10px 18px",borderRadius:9,border:"none",background:"#059669",color:"#fff",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>
-                📊 Export u Excel
-              </button>
-            </div>
+            <div style={{fontSize:13,color:"#166534",fontWeight:900,textTransform:"uppercase"}}>Rezultat</div>
+            <div style={{fontSize:22,fontWeight:900,color:"#064e3b",marginTop:4}}>Pokriveno {fmt(result.pokriveno)} m od {fmt(result.ukupnoPotrebno)} m</div>
+            <div style={{fontSize:13,color:"#166534",marginTop:4}}>Korišćeno rolni: <b>{result.plan.length}</b> · Ukupan otpad po kombinacijama: <b>{result.otpadMm} mm</b></div>
           </div>
 
           {Object.keys(result.remaining).some(function(k){return result.remaining[k]>0;}) && <div style={Object.assign({},card,{background:"#fff7ed",border:"1px solid #fed7aa",marginBottom:16})}><b>⚠️ Nepokriveno:</b> {Object.keys(result.remaining).filter(function(k){return result.remaining[k]>0;}).map(function(k){return k+"mm: "+fmt(result.remaining[k])+"m";}).join(" · ")}</div>}

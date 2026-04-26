@@ -1,61 +1,34 @@
-# 🚀 MAROPACK UPGRADED v2.0
+# MAROPACK - MINIMAL QR FIX
 
-## ✨ ŠTA JE NOVO:
+## ✅ ŠTA JE PROMENJENO:
 
-### 🔴 KRITIČNE POPRAVKE:
-1. ✅ **QR Bug Fix** - Magacin.jsx sa DEBUG console.log-om
-   - Traži u više kolona: `br_rolne`, `broj`, `broj_rolne`
-   - Detaljni Console output za debug
-   - Bolje error poruke
+### **SAMO 2 MINIMALNE IZMENE:**
 
-2. ✅ **lucide-react** dodat u package.json
-   - Vercel build sada radi!
+1. **Magacin.jsx** (linija 251-264)
+   - Dodato: `console.log("🔍 Tražim rolnu:", brRolne)`
+   - Dodato: `console.log("📦 Rezultat:", r)`
+   - **NIŠTA DRUGO NIJE PROMENJENO!**
 
-### ⚡ NOVE FUNKCIONALNOSTI:
-
-3. ✅ **Excel Export** (AIsecenjeOptimizer.jsx)
-   - Klikni "📊 Export u Excel" i preuzmi plan sečenja!
-   - Dinamički učitava XLSX library
-
-4. ✅ **AI Asistent UPGRADED** (AIpanel.jsx)
-   - Nove komande:
-     - "Kolika je vrednost magacina?" → Troškovi
-     - "Koliki je otpad?" → Efikasnost
-     - Svi stari upiti i dalje rade!
-
-5. ✅ **ErrorBoundary** komponenta
-   - Hvata sve greške u aplikaciji
-   - Prikazuje user-friendly poruku
-   - Omogućava refresh
-
-6. ✅ **Recharts library** za grafikone
-   - Spreman za Dashboard charts (sledeća faza)
-
-7. ✅ **XLSX library** za Excel export
-   - Export planova sečenja
-   - Export naloga (sledeća faza)
+2. **package.json**
+   - Dodato: `"lucide-react": "^0.263.1"`
+   - Potrebno za build na Vercel
+   - **NIŠTA DRUGO NIJE PROMENJENO!**
 
 ---
 
-## 📦 INSTALACIJA:
+## 🚀 INSTALACIJA:
 
 ```bash
-# 1. Raspakuj ZIP
-unzip maropack-upgraded.zip
-cd maropack-upgraded
+# 1. Raspakuj
+unzip maropack-minimal-fix.zip
+cd maropack-minimal-fix
 
-# 2. Instaliraj dependencies
+# 2. Instaliraj
 npm install
 
-# 3. Kreiraj .env (ako treba)
-# Supabase kredencijali su već u supabase.js
-
-# 4. Pokreni lokalno
-npm run dev
-
-# 5. Ili deploy na Vercel:
+# 3. Deploy
 git add .
-git commit -m "Upgraded to v2.0 - QR fix + Excel export + AI upgrades"
+git commit -m "Minimal fix: QR debug + lucide-react"
 git push
 ```
 
@@ -64,80 +37,24 @@ git push
 ## 🔍 DEBUG QR PROBLEMA:
 
 1. Deploy na Vercel
-2. Otvori aplikaciju: https://maropack-kxnm.vercel.app
-3. Pritisni **F12** → Console tab
+2. Otvori https://maropack-kxnm.vercel.app
+3. **F12** → Console
 4. Skeniraj QR kod
-5. Pročitaj Console output:
+5. **Screenshot Console-a** i pošalji mi!
 
+Trebalo bi da vidiš:
 ```
-🔍 MAROPACK QR DEBUG: Tražim rolnu: R-2026-12345
-🔍 URL parametar: ?rolna=R-2026-12345
-📦 Rezultat po br_rolne: {data: null, error: null}
-⚠️ Nije pronađeno po br_rolne, probam 'broj' i 'broj_rolne'...
-📦 Rezultat po broj/broj_rolne: {data: [...], error: null}
-✅ PRONAĐENO u alternat. koloni!
+🔍 Tražim rolnu: R-2026-12345
+📦 Rezultat: {data: ..., error: ...}
 ```
 
-**Pošalji mi screenshot Console-a!**
-
 ---
 
-## 🎯 SLEDEĆE FAZE (Opciono):
+## 📋 SVE OSTALO JE IDENTIČNO TVOJOJ VERZIJI!
 
-### FAZA 3 - Dashboard Charts:
-- Grafikoni proizvodnje (Recharts)
-- Real-time statistika
-- Visualizacija otpada
+- ✅ App.jsx - ISTI
+- ✅ AIpanel.jsx - ISTI
+- ✅ AIsecenjeOptimizer.jsx - ISTI
+- ✅ Svi ostali fajlovi - ISTI
 
-### FAZA 4 - Authentication:
-- Supabase Auth
-- Login/Logout
-- User roles (admin, radnik, magacioner)
-
-### FAZA 5 - Real-time Updates:
-- Supabase Realtime
-- Live notifikacije
-- Automatsko osvežavanje podataka
-
----
-
-## 📋 CHANGELOG:
-
-### v2.0 (UPGRADE):
-- ✅ QR skeniranje debug i fix
-- ✅ Excel export za plan sečenja
-- ✅ AI asistent sa troškovima i efikasnošću
-- ✅ ErrorBoundary za stabilnost
-- ✅ lucide-react, recharts, xlsx dodati
-
-### v1.0 (Original):
-- Magacin sa QR kodovima
-- AI optimizer sečenja
-- AI asistent
-- Radni nalozi
-- Kalkulatori
-
----
-
-## 🐛 PROBLEMI?
-
-1. **Build fails?**
-   - Proveri da li si instalirao: `npm install`
-   - Proveri lucide-react: `npm list lucide-react`
-
-2. **QR ne radi?**
-   - Otvori F12 Console
-   - Skeniraj QR
-   - Pošalji screenshot Console-a!
-
-3. **Excel export ne radi?**
-   - Proverite browser Console za greške
-   - XLSX library se učitava dinamički
-
----
-
-## 📞 KONTAKT:
-
-Za podršku, pošalji Console screenshot ili kod greške!
-
-**Happy coding! 🚀**
+**Samo debug za QR problem!**
