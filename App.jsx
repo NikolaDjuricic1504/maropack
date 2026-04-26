@@ -10,6 +10,7 @@ import NalogFolija from "./NalogFolija.jsx";
 import NoviNalogIzBaze from "./NoviNalogIzBaze.jsx";
 import AIpanel from "./AIpanel-MEGA.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
+import Dashboard from "./Dashboard.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1603,57 +1604,7 @@ export default function App() {
       <div style={{flex:1,overflow:"auto",padding:22}}>
 
         {/* DASHBOARD */}
-        {page==="dash"&&(
-          <div>
-            <h2 style={{margin:"0 0 18px",fontSize:20,fontWeight:800}}>Dashboard</h2>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:14,marginBottom:20}}>
-              {[
-                ["Proizvodi",db.proizvodi.length,"📦","#1d4ed8"],
-                ["Akt. ponude",db.ponude.filter(function(p){return p.status==="Aktivna";}).length,"📄","#7c3aed"],
-                ["Otv. nalozi",db.nalozi.filter(function(n){return n.status!=="Završeno";}).length,"🔧","#f59e0b"],
-                ["Završeni",db.nalozi.filter(function(n){return n.status==="Završeno";}).length,"✅","#10b981"],
-              ].map(function(item){
-                return(
-                  <div key={item[0]} style={Object.assign({},card,{borderLeft:"4px solid "+item[3]})}>
-                    <div style={{fontSize:26,marginBottom:6}}>{item[2]}</div>
-                    <div style={{fontSize:28,fontWeight:800,color:item[3]}}>{item[1]}</div>
-                    <div style={{fontSize:12,color:"#64748b"}}>{item[0]}</div>
-                  </div>
-                );
-              })}
-            </div>
-            {db.nalozi.length===0?(
-              <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
-                <div style={{fontSize:40,marginBottom:10}}>🚀</div>
-                <div style={{fontSize:15,fontWeight:600,marginBottom:6}}>Dobrodošli u Maropack!</div>
-                <div style={{fontSize:13}}>Izaberite kalkulator u meniju levo da počnete.</div>
-              </div>
-            ):(
-              <div style={card}>
-                <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🔧 Poslednji nalozi</div>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead><tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Ponuda","Kupac","Nalog","Tip","Status","Datum"].map(function(h){return <th key={h} style={{padding:"8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;})}
-                  </tr></thead>
-                  <tbody>
-                    {db.nalozi.slice(-8).reverse().map(function(n){
-                      return(
-                        <tr key={n.id} style={{borderBottom:"1px solid #f1f5f9"}}>
-                          <td style={{padding:"9px 8px",fontWeight:600,color:"#1d4ed8"}}>{n.ponBr}</td>
-                          <td style={{padding:"9px 8px"}}>{n.kupac}</td>
-                          <td style={{padding:"9px 8px"}}>{ICONS[n.ik]} {n.naziv}</td>
-                          <td style={{padding:"9px 8px"}}><span style={{background:(TIP_BOJA[n.tip]||"#64748b")+"20",color:TIP_BOJA[n.tip]||"#64748b",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:10}}>{TIP_LAB[n.tip]||n.tip||"—"}</span></td>
-                          <td style={{padding:"9px 8px"}}><span style={{background:SBJ[n.status+"_bg"]||"#f8fafc",color:SBJ[n.status]||"#64748b",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:11}}>{n.status}</span></td>
-                          <td style={{padding:"9px 8px",color:"#64748b"}}>{n.datum}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+        {page==="dash"&&<Dashboard card={card}/>}
 
         {/* KALKULATORI */}
         {page==="kalk_folija"&&<KalkulatorFolije user={user} db={db} setDb={setDb} setPage={setPage} msg={msg} inp={inp} card={card} lbl={lbl}/>}
