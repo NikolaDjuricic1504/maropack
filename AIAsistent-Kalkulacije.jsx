@@ -1,8 +1,10 @@
-// AIAsistent-Kalkulacije.jsx - PAMETNI ASISTENT ZA KALKULACIJE
+// AIAsistent-Kalkulacije.jsx - Gemini AI asistent za Maropack kalkulacije
 import { useState } from "react";
+import { pitajGemini } from "./aiClient.js";
 
-export default function AIAsistentKalkulacije({card, inp, lbl, msg}) {
+export default function AIAsistentKalkulacije({ card, inp, lbl, msg }) {
   const [upit, setUpit] = useState("");
+  const [modul, setModul] = useState("kalkulacije");
   const [loading, setLoading] = useState(false);
   const [rezultat, setRezultat] = useState(null);
   const [istorija, setIstorija] = useState([]);
@@ -14,152 +16,102 @@ export default function AIAsistentKalkulacije({card, inp, lbl, msg}) {
     }
 
     setLoading(true);
-    
-    // Simulacija AI analize (ovde bi išao poziv ka API-ju)
-    setTimeout(function() {
-      var odgovor = generirajOdgovor(upit);
-      
-      setRezultat(odgovor);
-      setIstorija(function(prev) {
-        return prev.concat([{
-          upit: upit,
-          odgovor: odgovor,
-          vreme: new Date().toLocaleString("sr-RS")
-        }]);
+
+    try {
+      const odgovor = await pitajGemini({
+        modul,
+        poruka: upit,
+        podaci: {
+          aplikacija: "Maropack",
+          napomena: "Korisnik želi praktičan predlog za proizvodnju, kalkulaciju, ponudu, magacin ili radni nalog."
+        }
       });
-      
+
+      const noviRezultat = {
+        tip: "gemini",
+        naslov: "🤖 Gemini AI odgovor",
+        sadrzaj: odgovor.text || "Nema odgovora.",
+        model: odgovor.model || "gemini",
+        modul
+      };
+
+      setRezultat(noviRezultat);
+      setIstorija(function (prev) {
+        return prev.concat([
+          {
+            upit,
+            modul,
+            odgovor: noviRezultat,
+            vreme: new Date().toLocaleString("sr-RS")
+          }
+        ]);
+      });
       setUpit("");
-      setLoading(false);
-    }, 1500);
+    } catch (e) {
+      msg("Gemini greška: " + (e?.message || "nepoznata greška"), "err");
+      setRezultat({
+        tip: "greska",
+        naslov: "⚠️ Gemini greška",
+        sadrzaj:
+          "Proveri da li si dodao GEMINI_API_KEY u Vercel Environment Variables i da li je deploy prošao.\n\nDetalj: " +
+          (e?.message || "nepoznata greška"),
+        model: "",
+        modul
+      });
+    }
+
+    setLoading(false);
   }
 
-  function generirajOdgovor(upit) {
-    var upitLower = upit.toLowerCase();
-    
-    // Preporuke za materijale
-    if (upitLower.includes("materijal") || upitLower.includes("folija")) {
-      return {
-        tip: "preporuka",
-        naslov: "💡 Preporuka materijala",
-        sadrzaj: "Za pakovanje hrane preporučujem **BOPP + CPP laminat**:\n\n" +
-                 "• BOPP 20µ - vanjski sloj (prozirnost, sjaj)\n" +
-                 "• CPP 30µ - unutrašnji sloj (termoseal)\n" +
-                 "• Ukupna gramatura: ~45.5 g/m²\n" +
-                 "• Procenjena cena: 3.2-3.8 EUR/kg",
-        saveti: [
-          "Kasiranje poboljšava barijeru za vlagu",
-          "Za duži rok upotrebe dodaj ALU sloj",
-          "BOPP SEDEF daje mat finish"
-        ]
-      };
-    }
-    
-    // Optimizacija dimenzija
-    if (upitLower.includes("dimenzij") || upitLower.includes("širina") || upitLower.includes("veličin")) {
-      return {
-        tip: "optimizacija",
-        naslov: "📐 Optimizacija dimenzija",
-        sadrzaj: "Analizirajući standard rolne **1000mm širine**:\n\n" +
-                 "• Optimalne širine za kese: 150, 200, 250, 333mm\n" +
-                 "• Bez otpada: 5x200mm ili 4x250mm\n" +
-                 "• Sa minimalnim otpadom (<5%): 3x333mm",
-        saveti: [
-          "Podesi širinu na faktor širine rolne",
-          "Razmotri dupli sekač za 2x produktivnost",
-          "Za male količine može se tolerisati 10-15% otpada"
-        ]
-      };
-    }
-    
-    // Kalkulacija cene
-    if (upitLower.includes("cena") || upitLower.includes("cen") || upitLower.includes("košta")) {
-      return {
-        tip: "kalkulacija",
-        naslov: "💰 Analiza cene",
-        sadrzaj: "Struktura troškova za laminat:\n\n" +
-                 "**Materijal (65-75%)** - najveći uticaj\n" +
-                 "**Kasiranje (10-15%)** - ako je potrebno\n" +
-                 "**Štampa (8-12%)** - zavisi od broja boja\n" +
-                 "**Ostalo (5-10%)** - transport, pakovanje",
-        saveti: [
-          "Marža 30-40% za standardne proizvode",
-          "Marža 50%+ za custom dizajn",
-          "Veće količine = niža cena po jedinici"
-        ]
-      };
-    }
-    
-    // Proizvodni proces
-    if (upitLower.includes("proizvod") || upitLower.includes("proces") || upitLower.includes("kako")) {
-      return {
-        tip: "proces",
-        naslov: "🏭 Proizvodni proces",
-        sadrzaj: "**Standardni redosled za laminat:**\n\n" +
-                 "1. **Štampa** - Flexo 4-6 boja\n" +
-                 "2. **Kasiranje** - Lepljenje slojeva\n" +
-                 "3. **Sazrevanje** - 48-72h\n" +
-                 "4. **Rezanje** - Podešavanje širine\n" +
-                 "5. **Izrada kesa** - Ako je potrebno",
-        saveti: [
-          "Sazrevanje je OBAVEZNO za barijerne folije",
-          "Test otisak pre punog naloga",
-          "QC kontrola posle svakog koraka"
-        ]
-      };
-    }
-    
-    // Default odgovor
-    return {
-      tip: "info",
-      naslov: "🤖 AI Asistent",
-      sadrzaj: "Mogu ti pomoći sa:\n\n" +
-               "• **Preporukama materijala** - koji materijal za koji proizvod\n" +
-               "• **Optimizacijom dimenzija** - kako smanjiti otpad\n" +
-               "• **Kalkulacijom cena** - analiza troškova\n" +
-               "• **Proizvodnim procesom** - redosled operacija\n\n" +
-               "Postavi mi konkretno pitanje!",
-      saveti: [
-        "Pokušaj: 'Koji materijal za pakovanje hrane?'",
-        "Ili: 'Kako optimizovati širinu kese?'",
-        "Ili: 'Koliko košta laminat?'"
-      ]
-    };
+  function quick(pitanje, m) {
+    setModul(m || "kalkulacije");
+    setUpit(pitanje);
   }
 
   return (
     <div>
-      <div style={Object.assign({}, card, {
-        marginBottom: 16,
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        color: "#fff"
-      })}>
-        <div style={{fontSize:24,fontWeight:900,marginBottom:4}}>🤖 AI Asistent za Kalkulacije</div>
-        <div style={{fontSize:14,opacity:0.9}}>
-          Postavi pitanje i dobij pametne preporuke!
+      <div
+        style={Object.assign({}, card, {
+          marginBottom: 16,
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "#fff"
+        })}
+      >
+        <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 4 }}>
+          🤖 Gemini AI Asistent za Maropack
+        </div>
+        <div style={{ fontSize: 14, opacity: 0.9 }}>
+          Kalkulacije, ponude, magacin i radni nalozi iz jednog AI modula.
         </div>
       </div>
 
-      {/* Input */}
-      <div style={Object.assign({}, card, {marginBottom:16})}>
-        <div style={{marginBottom:12}}>
-          <label style={lbl}>Tvoje pitanje</label>
-          <textarea
-            style={Object.assign({}, inp, {
-              height: 80,
-              resize: "vertical",
-              fontSize: 14
-            })}
-            value={upit}
-            onChange={function(e){ setUpit(e.target.value); }}
-            placeholder="npr: Koji materijal preporučuješ za pakovanje hrane?"
-            onKeyDown={function(e){
-              if(e.key === "Enter" && e.ctrlKey) {
-                analiziraj();
-              }
-            }}
-          />
-          <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>
-            💡 Saveti: Ctrl+Enter za slanje
+      <div style={Object.assign({}, card, { marginBottom: 16 })}>
+        <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={lbl}>Modul</label>
+            <select style={inp} value={modul} onChange={function (e) { setModul(e.target.value); }}>
+              <option value="kalkulacije">🧮 Kalkulacije</option>
+              <option value="ponude">📄 Ponude</option>
+              <option value="radni_nalozi">📋 Radni nalozi</option>
+              <option value="magacin">🏭 Magacin</option>
+              <option value="secenje">🧠 Sečenje</option>
+              <option value="opsti">🤖 Opšti AI</option>
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Tvoje pitanje / zahtev</label>
+            <textarea
+              style={Object.assign({}, inp, { height: 86, resize: "vertical", fontSize: 14 })}
+              value={upit}
+              onChange={function (e) { setUpit(e.target.value); }}
+              placeholder="npr: Napravi ponudu za BOPP/CPP 85mm, 25.000m za kupca Mayer"
+              onKeyDown={function (e) {
+                if (e.key === "Enter" && e.ctrlKey) analiziraj();
+              }}
+            />
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+              Ctrl+Enter za slanje
+            </div>
           </div>
         </div>
 
@@ -178,174 +130,91 @@ export default function AIAsistentKalkulacije({card, inp, lbl, msg}) {
             cursor: loading || !upit.trim() ? "not-allowed" : "pointer"
           }}
         >
-          {loading ? "🤔 Analiziram..." : "🚀 Analiziraj"}
+          {loading ? "🤔 Gemini analizira..." : "🚀 Pošalji Gemini AI"}
         </button>
       </div>
 
-      {/* Rezultat */}
       {rezultat && (
-        <div style={Object.assign({}, card, {
-          background: "#f0fdf4",
-          border: "2px solid #bbf7d0",
-          marginBottom: 16
-        })}>
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            marginBottom: 12,
-            paddingBottom: 12,
-            borderBottom: "1px solid #bbf7d0"
-          }}>
-            <div style={{fontSize:24}}>
-              {rezultat.tip === "preporuka" ? "💡" : 
-               rezultat.tip === "optimizacija" ? "📐" :
-               rezultat.tip === "kalkulacija" ? "💰" :
-               rezultat.tip === "proces" ? "🏭" : "🤖"}
-            </div>
-            <div style={{fontSize:18,fontWeight:800,color:"#166534"}}>
-              {rezultat.naslov}
+        <div
+          style={Object.assign({}, card, {
+            background: rezultat.tip === "greska" ? "#fef2f2" : "#f0fdf4",
+            border: "2px solid " + (rezultat.tip === "greska" ? "#fecaca" : "#bbf7d0"),
+            marginBottom: 16
+          })}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 24 }}>{rezultat.tip === "greska" ? "⚠️" : "🤖"}</div>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: rezultat.tip === "greska" ? "#991b1b" : "#166534" }}>
+                {rezultat.naslov}
+              </div>
+              {rezultat.model && (
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                  Modul: {rezultat.modul} · Model: {rezultat.model}
+                </div>
+              )}
             </div>
           </div>
 
-          <div style={{
-            fontSize: 14,
-            lineHeight: 1.6,
-            color: "#1e293b",
-            marginBottom: 16,
-            whiteSpace: "pre-line"
-          }}>
+          <div style={{ fontSize: 14, lineHeight: 1.65, color: "#1e293b", whiteSpace: "pre-line" }}>
             {rezultat.sadrzaj}
           </div>
-
-          {rezultat.saveti && rezultat.saveti.length > 0 && (
-            <div style={{
-              background: "#fff",
-              borderRadius: 8,
-              padding: 12
-            }}>
-              <div style={{
-                fontSize: 12,
-                fontWeight: 700,
-                color: "#64748b",
-                marginBottom: 8,
-                textTransform: "uppercase"
-              }}>
-                ✨ Dodatni saveti:
-              </div>
-              {rezultat.saveti.map(function(savet, i) {
-                return (
-                  <div key={i} style={{
-                    fontSize: 13,
-                    color: "#475569",
-                    marginBottom: 4,
-                    paddingLeft: 16,
-                    position: "relative"
-                  }}>
-                    <span style={{
-                      position: "absolute",
-                      left: 0,
-                      color: "#059669",
-                      fontWeight: 700
-                    }}>•</span>
-                    {savet}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
 
-      {/* Istorija */}
       {istorija.length > 0 && (
         <div style={card}>
-          <div style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12
-          }}>
-            <div style={{fontSize:14,fontWeight:700,color:"#64748b"}}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#64748b" }}>
               📜 Istorija pitanja ({istorija.length})
             </div>
             <button
-              onClick={function(){ setIstorija([]); setRezultat(null); }}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 6,
-                border: "1px solid #e2e8f0",
-                background: "#fff",
-                color: "#64748b",
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: "pointer"
-              }}
+              onClick={function () { setIstorija([]); setRezultat(null); }}
+              style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #e2e8f0", background: "#fff", color: "#64748b", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
             >
               Obriši istoriju
             </button>
           </div>
 
-          <div style={{display:"grid",gap:8}}>
-            {istorija.slice().reverse().map(function(item, i) {
+          <div style={{ display: "grid", gap: 8 }}>
+            {istorija.slice().reverse().map(function (item, i) {
               return (
-                <div key={i} style={{
-                  background: "#f8fafc",
-                  borderRadius: 8,
-                  padding: 10,
-                  border: "1px solid #e2e8f0"
-                }}>
-                  <div style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: "#1d4ed8",
-                    marginBottom: 4
-                  }}>
-                    Q: {item.upit}
+                <button
+                  key={i}
+                  onClick={function () { setRezultat(item.odgovor); }}
+                  style={{ background: "#f8fafc", borderRadius: 8, padding: 10, border: "1px solid #e2e8f0", cursor: "pointer", textAlign: "left" }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8", marginBottom: 4 }}>
+                    {item.modul}: {item.upit}
                   </div>
-                  <div style={{
-                    fontSize: 11,
-                    color: "#64748b"
-                  }}>
-                    {item.vreme}
-                  </div>
-                </div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>{item.vreme}</div>
+                </button>
               );
             })}
           </div>
         </div>
       )}
 
-      {/* Quick actions */}
-      {!rezultat && istorija.length === 0 && (
+      {istorija.length === 0 && !rezultat && (
         <div style={card}>
-          <div style={{fontSize:14,fontWeight:700,marginBottom:12,color:"#64748b"}}>
-            ⚡ Brza pitanja:
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "#64748b" }}>
+            ⚡ Brzi primeri:
           </div>
-          <div style={{display:"grid",gap:8}}>
+          <div style={{ display: "grid", gap: 8 }}>
             {[
-              "Koji materijal za pakovanje hrane?",
-              "Kako optimizovati širinu kese?",
-              "Koliko košta BOPP laminat?",
-              "Redosled proizvodnje za laminat?"
-            ].map(function(pitanje) {
+              ["Napravi ponudu za BOPP/CPP 85mm, 25.000m za kupca Mayer", "ponude"],
+              ["Koji materijal preporučuješ za pakovanje hrane?", "kalkulacije"],
+              ["Iz packing liste izvuci materijal, širinu, kg i lot", "magacin"],
+              ["Napravi predlog radnog naloga za triplex za kafu", "radni_nalozi"],
+              ["Optimizuj sečenje za rolne širine 1000mm", "secenje"]
+            ].map(function (x) {
               return (
                 <button
-                  key={pitanje}
-                  onClick={function(){ setUpit(pitanje); }}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    border: "1px solid #e2e8f0",
-                    background: "#fff",
-                    color: "#475569",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    textAlign: "left"
-                  }}
+                  key={x[0]}
+                  onClick={function () { quick(x[0], x[1]); }}
+                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" }}
                 >
-                  💬 {pitanje}
+                  💬 {x[0]}
                 </button>
               );
             })}

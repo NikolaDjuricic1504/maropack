@@ -1,21 +1,24 @@
-OVO JE ISPRAVLJENA VERZIJA.
+GEMINI ZA MAROPACK - UPUTSTVO
 
-Problem koji je bio u tvom uploadu:
-- CSS je završio u aiParser.js
-- parser je završio u excelKalkulacija.js
-- kalkulacija je bila pomešana sa AIponuda.jsx
-- DashboardProizvodnja.jsx je imao pogrešan sadržaj
-
-Šta da uradiš:
 1) Raspakuj ZIP.
-2) Uploaduj SVE fajlove u GitHub repo.
-3) Ako GitHub pita da zameni postojeće fajlove, klikni Replace/Commit changes.
-4) Na Vercelu uradi Redeploy.
 
-Uključeno:
-- AI ponuda
-- AI parser upita kupca
-- Excel kalkulacija u JS
-- AI čitanje packing liste iz nalepljenog teksta
-- Potvrda pre dodavanja na stanje
-- Lokalno stanje magacina u browser localStorage
+2) Uploaduj fajlove u GitHub repo ovako:
+   - api/gemini.js  -> mora biti u folderu api
+   - aiClient.js    -> pored App.jsx i AIAsistent-Kalkulacije.jsx
+   - AIAsistent-Kalkulacije.jsx -> zameni postojeći fajl
+
+3) U Vercel dodaj Environment Variable:
+   Name: GEMINI_API_KEY
+   Value: tvoj Google Gemini API key
+
+4) U Vercel uradi redeploy ili napravi commit na main.
+
+5) Otvori aplikaciju i uradi CTRL + SHIFT + R.
+
+6) U meniju otvori AI Kalkulacije i testiraj:
+   Napravi ponudu za BOPP/CPP 85mm, 25.000m za kupca Mayer
+
+VAŽNO:
+- Ne stavljaj GEMINI_API_KEY u React kod.
+- API key mora biti samo u Vercel Environment Variables.
+- Ako dobiješ grešku da nedostaje GEMINI_API_KEY, znači env nije dodat ili nije urađen redeploy.
