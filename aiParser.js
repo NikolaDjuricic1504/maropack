@@ -14,7 +14,7 @@ export function parseUpit(text) {
   else if (lower.includes("bopp")) materijal = "BOPP";
   else if (lower.includes("cpp")) materijal = "CPP";
   else if (lower.includes("pet")) materijal = "PET";
-  else if (lower.includes("papir")) materijal = "PAPIR";
+  else if (lower.includes("papir") || lower.includes("paper")) materijal = "PAPIR";
   else if (lower.includes("alu") || lower.includes("alumin")) materijal = "ALU";
   else if (lower.includes("pe")) materijal = "PE";
 

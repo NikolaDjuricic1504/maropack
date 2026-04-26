@@ -16,7 +16,7 @@ export default function AIPackingLista() {
   const analiziraj = () => {
     const parsed = parsePackingLista(tekst);
     setStavke(parsed);
-    setPoruka(parsed.length ? "AI je pronašao stavke. Proveri i potvrdi." : "Nisu pronađene stavke. Nalepi jasniji tekst packing liste.");
+    setPoruka(parsed.length ? "AI je pronašao stavke. Proveri i potvrdi." : "Nisu pronađene stavke.");
   };
 
   const update = (id, field, value) => {
@@ -29,6 +29,7 @@ export default function AIPackingLista() {
       setPoruka("Nema označenih stavki za unos.");
       return;
     }
+
     const novoStanje = dodajNaStanje(zaUnos);
     setStanje(novoStanje);
     setPoruka(`Potvrđeno i dodato na stanje: ${zaUnos.length} stavki.`);
@@ -39,10 +40,7 @@ export default function AIPackingLista() {
   return (
     <div className="card">
       <h2>AI prijem robe iz packing liste</h2>
-      <p>
-        Nalepi tekst iz packing liste. AI će izvući materijal, širinu, kg, broj rola,
-        dužinu i lot. Ništa se ne dodaje na stanje dok ti ne klikneš potvrdu.
-      </p>
+      <p>Nalepi tekst iz packing liste. Ništa ne ulazi na stanje dok ti ne potvrdiš.</p>
 
       <div className="field">
         <label>Packing lista / tekst dobavljača</label>
@@ -80,13 +78,7 @@ export default function AIPackingLista() {
               <tbody>
                 {stavke.map(s => (
                   <tr key={s.id}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={s.potvrdi}
-                        onChange={e => update(s.id, "potvrdi", e.target.checked)}
-                      />
-                    </td>
+                    <td><input type="checkbox" checked={s.potvrdi} onChange={e => update(s.id, "potvrdi", e.target.checked)} /></td>
                     <td><input value={s.materijal} onChange={e => update(s.id, "materijal", e.target.value)} /></td>
                     <td><input value={s.sirina} onChange={e => update(s.id, "sirina", e.target.value)} /></td>
                     <td><input value={s.kg} onChange={e => update(s.id, "kg", e.target.value)} /></td>
@@ -101,14 +93,12 @@ export default function AIPackingLista() {
           </div>
 
           <br />
-          <button className="primary" onClick={potvrdiPrijem}>
-            Potvrdi i dodaj na stanje
-          </button>
+          <button className="primary" onClick={potvrdiPrijem}>Potvrdi i dodaj na stanje</button>
         </div>
       )}
 
       <div className="card">
-        <h3>Trenutno stanje iz aplikacije</h3>
+        <h3>Trenutno stanje</h3>
         {stanje.length === 0 ? (
           <p>Nema unetih stavki.</p>
         ) : (

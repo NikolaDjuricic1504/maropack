@@ -13,14 +13,14 @@ export function parsePackingLista(text) {
       lower.includes("bopp") ? "BOPP" :
       lower.includes("cpp") ? "CPP" :
       lower.includes("pet") ? "PET" :
-      lower.includes("pe") ? "PE" :
       lower.includes("papir") || lower.includes("paper") ? "PAPIR" :
       lower.includes("alu") || lower.includes("aluminium") ? "ALU" :
+      lower.includes("pe") ? "PE" :
       "NEPOZNATO";
 
     const sirinaMatch = line.match(/(\d{3,4})\s?(mm|x)/i);
     const kgMatch = line.match(/(\d+(?:[.,]\d+)?)\s?(kg|kgs)/i);
-    const rolaMatch = line.match(/(\d+)\s?(rola|roll|rolls|pcs|kom)/i);
+    const rolaMatch = line.match(/(\d+)\s?(rola|role|roll|rolls|pcs|kom)/i);
     const duzinaMatch = line.match(/(\d+(?:[.,]\d+)?)\s?(m|meter|metara)/i);
     const lotMatch = line.match(/(?:lot|batch|šarža|sarza)[:\s-]*([A-Z0-9\-\/]+)/i);
 
