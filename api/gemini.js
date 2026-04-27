@@ -34,7 +34,7 @@ Odgovori jasno i konkretno na srpskom jeziku.
 `;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -48,7 +48,7 @@ Odgovori jasno i konkretno na srpskom jeziku.
           ],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 1500
+            maxOutputTokens: 1200
           }
         })
       }
@@ -64,12 +64,13 @@ Odgovori jasno i konkretno na srpskom jeziku.
     }
 
     const text =
-      data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("\n") ||
-      "Nema odgovora od Gemini";
+      data?.candidates?.[0]?.content?.parts
+        ?.map(p => p.text || "")
+        .join("\n") || "Nema odgovora od Gemini";
 
     return res.status(200).json({
       text,
-      model: "gemini-2.5-flash"
+      model: "gemini-1.5-flash"
     });
 
   } catch (err) {
