@@ -1,6 +1,41 @@
-import { createClient } from '@supabase/supabase-js'
+// supabase.js - Konfiguracija za Supabase bazu
+import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = 'https://xmlnvxzdytuybguirjgz.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtbG52eHpkeXR1eWJndWlyamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODA4OTUsImV4cCI6MjA5MjI1Njg5NX0.KnKwY_UXiUj5VwcoYQ-hLdSy4UaQdj_KwbiPdbgXKzg'
+// ЗАМЕНИ СА СВОЈИМ SUPABASE CREDENTIALS
+const supabaseUrl = 'https://your-project.supabase.co';
+const supabaseAnonKey = 'your-anon-key-here';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// SQL za kreiranje tabele (pokreni u Supabase SQL Editor):
+/*
+CREATE TABLE nalozi (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  broj_naloga TEXT NOT NULL UNIQUE,
+  naziv TEXT NOT NULL,
+  status TEXT DEFAULT 'u_pripremi',
+  parametri JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_nalozi_broj ON nalozi(broj_naloga);
+CREATE INDEX idx_nalozi_status ON nalozi(status);
+
+-- Row Level Security (omogući u Supabase Dashboard)
+ALTER TABLE nalozi ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Svi mogu da čitaju
+CREATE POLICY "Anyone can read nalozi"
+  ON nalozi FOR SELECT
+  USING (true);
+
+-- Policy: Autentifikovani korisnici mogu da menjaju
+CREATE POLICY "Authenticated users can insert nalozi"
+  ON nalozi FOR INSERT
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Authenticated users can update nalozi"
+  ON nalozi FOR UPDATE
+  USING (auth.role() = 'authenticated');
+*/
