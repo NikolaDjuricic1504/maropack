@@ -1,27 +1,25 @@
-# 📋 MAROPACK - RADNI NALOZI ZA FOLIJU
+# Maropack - full dizajn operativnih naloga
 
-React komponente za digitalne radne naloge u proizvodnji folija.
+Uploaduj `NaloziOperacije.jsx` u `src/` i zameni postojeći fajl.
 
-## 🎯 ŠTA DOBIJATE
+U App.jsx mora da postoji:
 
-**7 React komponenata:**
-1. `NalogGlavni.jsx` - Glavni radni nalog (master)
-2. `NalogStampa.jsx` - Nalog za štampu + KPF crtež
-3. `NalogMaterijali.jsx` - Nalog za potrebu materijala
-4. Ostale komponente u pripremi...
-
-## 🚀 BRZA INSTALACIJA
-
-```bash
-# 1. Instalirajte dependencies
-npm install @supabase/supabase-js
-
-# 2. Podesite Supabase u supabase.js fajlu
-# 3. Importujte komponente u svoju aplikaciju
-
-import NalogGlavni from './NalogGlavni';
+```jsx
+import NaloziOperacije from "./NaloziOperacije.jsx";
 ```
 
-## 📖 KOMPLETNO UPUTSTVO IZNAD
+I render:
 
-Pogledajte fajl za detaljna uputstva.
+```jsx
+{page==="operativni_nalozi" && (
+  <NaloziOperacije nalogId={glavniNalogId} />
+)}
+```
+
+Komponenta prikazuje:
+- Potreba materijala
+- Nalog za štampu
+- Nalog za kaširanje
+- Nalog za rezanje
+- Nalog za perforaciju
+- Izgled na rolni
