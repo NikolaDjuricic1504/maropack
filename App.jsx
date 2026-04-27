@@ -12,7 +12,7 @@ import AIpanel from "./AIpanel-MEGA-V2.jsx";
 import AIAsistentKalkulacije from "./AIAsistent-Kalkulacije.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 import Dashboard from "./Dashboard.jsx";
-import NalogGlavni from "./NalogUniversal.jsx";
+import NalogGlavni from "./NalogGlavni.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
