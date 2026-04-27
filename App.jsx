@@ -12,6 +12,7 @@ import AIpanel from "./AIpanel-MEGA-V2.jsx";
 import AIAsistentKalkulacije from "./AIAsistent-Kalkulacije.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 import Dashboard from "./Dashboard.jsx";
+import NalogGlavni from "./NalogGlavni.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1440,6 +1441,7 @@ export default function App() {
   const [stampa,setStampa]=useState(null);
   const [uploading,setUploading]=useState(null);
   const [pdfLoading,setPdfLoading]=useState(false);
+  const [glavniNalogId,setGlavniNalogId]=useState(null);
   const pregPonudaRef=useRef(null);
 
   const msg=useCallback(function(m,t){setNotif({msg:m,tip:t||"ok"});setTimeout(function(){setNotif(null);},3000);},[]);
@@ -1471,6 +1473,34 @@ export default function App() {
       .on('postgres_changes',{event:'*',schema:'public',table:'nalozi'},function(){loadData();})
       .subscribe();
     return function(){supabase.removeChannel(ch);};
+  },[user]);
+
+  useEffect(function(){
+    if(!user)return;
+
+    async function ucitajGlavniNalog(){
+      try{
+        const {data,error}=await supabase
+          .from("radni_nalozi_folija")
+          .select("id")
+          .order("created_at",{ascending:false})
+          .limit(1)
+          .single();
+
+        if(error){
+          console.log("Nema glavnog naloga:",error.message);
+          setGlavniNalogId(null);
+          return;
+        }
+
+        if(data&&data.id)setGlavniNalogId(data.id);
+      }catch(e){
+        console.log("Greška pri učitavanju glavnog naloga:",e.message);
+        setGlavniNalogId(null);
+      }
+    }
+
+    ucitajGlavniNalog();
   },[user]);
 
   async function updN(id,f,v){
@@ -1567,6 +1597,7 @@ export default function App() {
     {k:"kalk_spulna",l:"Kalk. špulne",i:"🔄"},
     {k:"ponude",l:"Ponude",i:"📄"},
     {k:"nalozi",l:"Radni nalozi",i:"🔧"},
+    {k:"izgled_naloga",l:"Izgled naloga",i:"📋"},
             {k:"pracenje",l:"Praćenje",i:"🔴"},
             {k:"novi_nalog",l:"Nalog iz baze",i:"⚡"},
             {k:"baza",l:"Baza proizvoda",i:"📦"},
@@ -1804,6 +1835,18 @@ export default function App() {
         {page==="secenje"&&<AIsecenjeOptimizer card={card} inp={inp} lbl={lbl} msg={msg}/>}
         {page==="pracenje"&&<PracenjeNaloga db={db} setDb={setDb} card={card} inp={inp} lbl={lbl} msg={msg} user={user} TIP_BOJA={TIP_BOJA} TIP_LAB={TIP_LAB}/>}
         {page==="novi_nalog"&&<NoviNalogIzBaze user={user} db={db} msg={msg} setPage={setPage} inp={inp} card={card} lbl={lbl}/>}
+
+        {page==="izgled_naloga"&&(
+          <div>
+            {!glavniNalogId?(
+              <div style={Object.assign({},card,{padding:30,textAlign:"center",color:"#64748b"})}>
+                Nema naloga u tabeli radni_nalozi_folija.
+              </div>
+            ):(
+              <NalogGlavni nalogId={glavniNalogId}/>
+            )}
+          </div>
+        )}
 
         {/* PODESAVANJA */}
         {page==="pod"&&user.uloga==="admin"&&(
