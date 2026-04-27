@@ -16,7 +16,7 @@ export default function NalogGlavni({ nalogId, onClose }) {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('nalozi')
+        .from('radni_nalozi_folija')  // ← UPDATED: nova tabela
         .select('*')
         .eq('id', nalogId)
         .single();
