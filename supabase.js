@@ -1,41 +1,30 @@
 // supabase.js - Konfiguracija za Supabase bazu
 import { createClient } from '@supabase/supabase-js';
 
-// ЗАМЕНИ СА СВОЈИМ SUPABASE CREDENTIALS
-const supabaseUrl = 'https://your-project.supabase.co';
-const supabaseAnonKey = 'your-anon-key-here';
+// ========================================
+// ZAMENI OVE 2 VREDNOSTI:
+// ========================================
+// 1. Otvori: https://database.supabase.com
+// 2. Uloguj se
+// 3. Klikni: Settings (zupčanik dole levo) → API
+// 4. Kopiraj "Project URL" i stavi ga u liniju 14
+// 5. Kopiraj "anon / public key" i stavi ga u liniju 15
+
+const supabaseUrl = 'https://xmlnvxzdytuybguirjgz.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtbG52eHpkeXR1eWJndWlyamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODA4OTUsImV4cCI6MjA5MjI1Njg5NX0.KnKwY_UXiUj5VwcoYQ-hLdSy4UaQdj_KwbiPdbgXKzg';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// SQL za kreiranje tabele (pokreni u Supabase SQL Editor):
-/*
-CREATE TABLE nalozi (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  broj_naloga TEXT NOT NULL UNIQUE,
-  naziv TEXT NOT NULL,
-  status TEXT DEFAULT 'u_pripremi',
-  parametri JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+// ========================================
+// PRIMER KAKO TREBA DA IZGLEDA:
+// ========================================
+// const supabaseUrl = 'https://abcdefghijk.supabase.co';
+// const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiY2RlZmdoaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUwMDAwMDAsImV4cCI6MTk2MDU3NjAwMH0.EXAMPLE_SIGNATURE';
 
-CREATE INDEX idx_nalozi_broj ON nalozi(broj_naloga);
-CREATE INDEX idx_nalozi_status ON nalozi(status);
-
--- Row Level Security (omogući u Supabase Dashboard)
-ALTER TABLE nalozi ENABLE ROW LEVEL SECURITY;
-
--- Policy: Svi mogu da čitaju
-CREATE POLICY "Anyone can read nalozi"
-  ON nalozi FOR SELECT
-  USING (true);
-
--- Policy: Autentifikovani korisnici mogu da menjaju
-CREATE POLICY "Authenticated users can insert nalozi"
-  ON nalozi FOR INSERT
-  WITH CHECK (auth.role() = 'authenticated');
-
-CREATE POLICY "Authenticated users can update nalozi"
-  ON nalozi FOR UPDATE
-  USING (auth.role() = 'authenticated');
-*/
+// ========================================
+// NAPOMENA:
+// ========================================
+// - Project URL počinje sa "https://" i završava sa ".supabase.co"
+// - anon key je DUGA vrednost koja počinje sa "eyJ"
+// - NE DELJI anon key javno - to je tvoj API ključ!
+// ========================================
