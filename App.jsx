@@ -13,6 +13,7 @@ import AIAsistentKalkulacije from "./AIAsistent-Kalkulacije.jsx";
 import AIsecenjeOptimizer from "./AIsecenjeOptimizer.jsx";
 import Dashboard from "./Dashboard.jsx";
 import NalogGlavni from "./NalogGlavni.jsx";
+import NaloziOperacije from "./NaloziOperacije.jsx";
 
 // ===================== MATERIJALI =====================
 const MAT_DATA = {
@@ -1598,6 +1599,7 @@ export default function App() {
     {k:"ponude",l:"Ponude",i:"📄"},
     {k:"nalozi",l:"Radni nalozi",i:"🔧"},
     {k:"izgled_naloga",l:"Izgled naloga",i:"📋"},
+    {k:"operativni_nalozi",l:"Operativni nalozi",i:"📄"},
             {k:"pracenje",l:"Praćenje",i:"🔴"},
             {k:"novi_nalog",l:"Nalog iz baze",i:"⚡"},
             {k:"baza",l:"Baza proizvoda",i:"📦"},
@@ -1844,6 +1846,18 @@ export default function App() {
               </div>
             ):(
               <NalogGlavni nalogId={glavniNalogId}/>
+            )}
+          </div>
+        )}
+
+        {page==="operativni_nalozi"&&(
+          <div>
+            {!glavniNalogId?(
+              <div style={Object.assign({},card,{padding:30,textAlign:"center",color:"#64748b"})}>
+                Nema naloga u tabeli radni_nalozi_folija.
+              </div>
+            ):(
+              <NaloziOperacije nalogId={glavniNalogId}/>
             )}
           </div>
         )}
