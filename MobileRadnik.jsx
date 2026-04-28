@@ -1,15 +1,7 @@
-export default function Dashboard({nalozi,magacin,otpad}){
-  const aktivni=nalozi.filter(n=>!['Završen','Isporučen'].includes(n.status)).length;
-  const profit=nalozi.reduce((s,n)=>s+(n.cena-n.trosak),0);
-  const kg=magacin.reduce((s,m)=>s+m.kg,0);
-  const rez=magacin.reduce((s,m)=>s+m.rezervisano,0);
-  return <div className="grid">
-    <div className="grid cards">
-      <div className="card"><div className="label">Aktivni nalozi</div><div className="kpi">{aktivni}</div></div>
-      <div className="card"><div className="label">Ukupno kg u magacinu</div><div className="kpi">{kg.toLocaleString()}</div></div>
-      <div className="card"><div className="label">Rezervisano kg</div><div className="kpi">{rez.toLocaleString()}</div></div>
-      <div className="card"><div className="label">Profit naloga</div><div className="kpi">{profit.toLocaleString()} €</div></div>
-    </div>
-    <div className="card"><h3>Tok sistema</h3><p>Kalkulacija → nalog → rezervacija materijala → plan proizvodnje → QR praćenje → potrošnja → otpad/profit.</p></div>
-  </div>
+import { useMemo, useState } from 'react';
+export default function Kalkulator({nalozi,setNalozi,msg}){
+ const [naziv,setNaziv]=useState('Triplex 840mm'); const [kupac,setKupac]=useState('Rossella kupac'); const [sir,setSir]=useState(840); const [kg,setKg]=useState(2000); const [cena,setCena]=useState(5.2); const [trosak,setTrosak]=useState(3.8);
+ const res=useMemo(()=>({prodaja:kg*cena,trosak:kg*trosak,profit:kg*(cena-trosak)}),[kg,cena,trosak]);
+ function nalog(){const br=`MP-${new Date().getFullYear()}-${String(nalozi.length+1).padStart(4,'0')}`;setNalozi([{id:crypto.randomUUID(),br,kupac,proizvod:naziv,status:'Kreiran',cena:res.prodaja,trosak:res.trosak,masina:'Štampa 1'},...nalozi]);msg('Kreiran nalog '+br)}
+ return <div className="grid"><div className="card"><div className="row"><div><div className="label">Kupac</div><input value={kupac} onChange={e=>setKupac(e.target.value)}/></div><div><div className="label">Proizvod</div><input value={naziv} onChange={e=>setNaziv(e.target.value)}/></div><div><div className="label">Širina mm</div><input type="number" value={sir} onChange={e=>setSir(+e.target.value)}/></div><div><div className="label">Količina kg</div><input type="number" value={kg} onChange={e=>setKg(+e.target.value)}/></div><div><div className="label">Cena €/kg</div><input type="number" step="0.1" value={cena} onChange={e=>setCena(+e.target.value)}/></div><div><div className="label">Trošak €/kg</div><input type="number" step="0.1" value={trosak} onChange={e=>setTrosak(+e.target.value)}/></div></div><br/><button className="primary" onClick={nalog}>Kreiraj nalog</button></div><div className="grid cards"><div className="card"><div className="label">Prodaja</div><div className="kpi">{res.prodaja.toLocaleString()} €</div></div><div className="card"><div className="label">Trošak</div><div className="kpi">{res.trosak.toLocaleString()} €</div></div><div className="card"><div className="label">Profit</div><div className="kpi">{res.profit.toLocaleString()} €</div></div></div></div>
 }

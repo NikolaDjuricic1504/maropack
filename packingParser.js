@@ -1,14 +1,62 @@
-export const statusi = ['Kreiran','Materijal rezervisan','U štampi','U kasiranju','U rezanju','Završen','Isporučen'];
-export const radnici = ['Milan','Jovana','Jelena','Dunja','Tihana'];
-export const masine = ['Štampa 1','Kasirka 1','Kasirka 2','Rezač 1','Špulna'];
-export const initialNalozi = [
-  {id:'n1', br:'MP-2026-0001', kupac:'Maxi', proizvod:'BOPP/PE 250mm', status:'U štampi', cena:4200, trosak:3100, masina:'Štampa 1'},
-  {id:'n2', br:'MP-2026-0002', kupac:'Banda Bianca', proizvod:'Triplex 840mm', status:'Materijal rezervisan', cena:6500, trosak:4700, masina:'Kasirka 1'},
-  {id:'n3', br:'MP-2026-0003', kupac:'Mayer', proizvod:'Kese 95mm', status:'U rezanju', cena:2800, trosak:1900, masina:'Rezač 1'}
-];
-export const initialMagacin = [
-  {id:'m1', materijal:'Papir', debljina:'55g', sirina:840, kg:12400, rezervisano:2100, rolni:11, lot:'RS-55-A'},
-  {id:'m2', materijal:'Papir', debljina:'60g', sirina:840, kg:9800, rezervisano:0, rolni:25, lot:'RS-60-B'},
-  {id:'m3', materijal:'BOPP', debljina:'20µ', sirina:1250, kg:8200, rezervisano:900, rolni:8, lot:'BOPP20-C'},
-  {id:'m4', materijal:'ALU', debljina:'7µ', sirina:840, kg:1600, rezervisano:300, rolni:3, lot:'ALU7-D'}
-];
+const CENE_PO_KG = {
+  BOPP: 2.6,
+  CPP: 2.7,
+  PET: 3.1,
+  PE: 2.4,
+  ALU: 8.5,
+  PAPIR: 1.9,
+  DUPLEX: 3.2,
+  TRIPLEX: 4.2,
+  NEPOZNATO: 3.0
+};
+
+export function izracunajCenu(data) {
+  const sirina = Number(data?.sirina || data?.dimenzijaSirina || 500);
+  const visina = Number(data?.dimenzijaVisina || 1000);
+  const kom = Number(data?.kolicinaKom || 0);
+  const kgUneto = Number(data?.kolicinaKg || 0);
+  const m2Uneto = Number(data?.kolicinaM2 || 0);
+
+  const gramaza =
+    data?.materijal === "TRIPLEX" ? 120 :
+    data?.materijal === "DUPLEX" ? 90 :
+    75;
+
+  const cenaKg = CENE_PO_KG[data?.materijal] || CENE_PO_KG.NEPOZNATO;
+
+  let m2 = m2Uneto;
+  if (!m2 && kom > 0) {
+    m2 = (sirina / 1000) * (visina / 1000) * kom;
+  }
+
+  let kg = kgUneto;
+  if (!kg && m2 > 0) {
+    kg = (m2 * gramaza) / 1000;
+  }
+
+  if (!m2 && kg > 0) {
+    m2 = (kg * 1000) / gramaza;
+  }
+
+  const materijal = kg * cenaKg;
+  const proizvodnja = kg * 0.45;
+  const stampa = data?.stampa ? kg * 0.35 : 0;
+  const perforacija = data?.perforacija ? kg * 0.12 : 0;
+  const ukupno = materijal + proizvodnja + stampa + perforacija;
+
+  return {
+    sirina,
+    visina,
+    gramaza,
+    cenaKgMaterijala: cenaKg,
+    m2,
+    kg,
+    materijal,
+    proizvodnja,
+    stampa,
+    perforacija,
+    ukupno,
+    cenaKom: kom > 0 ? ukupno / kom : 0,
+    cenaKgUkupno: kg > 0 ? ukupno / kg : 0
+  };
+}
