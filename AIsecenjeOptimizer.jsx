@@ -1,190 +1,438 @@
-import { useEffect, useState } from "react";
+// AIpanel-MEGA.jsx - SUPER UNAPREĐEN AI ASISTENT
+import { useState } from "react";
 import { supabase } from "./supabase.js";
 
-function num(v){ return Number(v||0); }
-function fmt(v){ return num(v).toLocaleString("sr-RS", {maximumFractionDigits: 1}); }
-function comboKey(c){ return c.slice().sort(function(a,b){return a-b;}).join("+"); }
+function n(v){ return Number(v||0); }
+function fmt(v, suf){ return n(v).toLocaleString("sr-RS", {maximumFractionDigits: 1}) + (suf||""); }
 
-function genCombos(widths, masterWidth, maxPieces) {
-  var out = [];
-  var seen = {};
-  widths = widths.filter(function(x){return num(x)>0;}).sort(function(a,b){return b-a;});
-  function rec(start, arr, sum) {
-    if(arr.length>0) {
-      var key = comboKey(arr);
-      if(!seen[key]) { seen[key]=true; out.push({items:arr.slice(), sum:sum, waste:masterWidth-sum}); }
-    }
-    if(arr.length >= maxPieces) return;
-    for(var i=start;i<widths.length;i++) {
-      var w = num(widths[i]);
-      if(sum + w <= masterWidth) {
-        arr.push(w);
-        rec(i, arr, sum+w);
-        arr.pop();
-      }
-    }
-  }
-  rec(0, [], 0);
-  return out.sort(function(a,b){ return a.waste-b.waste || b.sum-a.sum; }).slice(0, 1500);
-}
+export default function AIpanelMEGA({card}) {
+  const [pitanje,setPitanje] = useState("");
+  const [odgovor,setOdgovor] = useState("");
+  const [loading,setLoading] = useState(false);
+  const [history, setHistory] = useState([]);
 
-function napraviPlan(rolne, potrebe, maxPieces) {
-  var remaining = {};
-  potrebe.forEach(function(p){
-    var w = num(p.sirina);
-    var m = num(p.metraza) * Math.max(1, num(p.kolicina)||1);
-    if(w && m) remaining[w] = (remaining[w]||0) + m;
-  });
-
-  var aktivneSirine = Object.keys(remaining).map(Number).filter(function(w){return remaining[w]>0;});
-  var dostupne = rolne
-    .filter(function(r){return num(r.sirina)>0 && num(r.metraza_ost || r.metraza)>0;})
-    .sort(function(a,b){return num(b.sirina)-num(a.sirina);});
-
-  var plan = [];
-  dostupne.forEach(function(rola){
-    aktivneSirine = Object.keys(remaining).map(Number).filter(function(w){return remaining[w]>0;});
-    if(aktivneSirine.length===0) return;
-    var master = num(rola.sirina);
-    var len = num(rola.metraza_ost || rola.metraza);
-    var combos = genCombos(aktivneSirine, master, maxPieces||10);
-    if(combos.length===0) return;
-
-    var best = null;
-    combos.forEach(function(c){
-      var korisno = 0;
-      c.items.forEach(function(w){ korisno += Math.min(len, remaining[w]||0); });
-      var score = korisno*1000 - c.waste*len - Math.max(0,c.items.length-6)*100;
-      if(!best || score > best.score) best = Object.assign({}, c, {score:score, korisno:korisno});
-    });
-    if(!best || best.korisno<=0) return;
-
-    var covered = {};
-    best.items.forEach(function(w){
-      var use = Math.min(len, remaining[w]||0);
-      remaining[w] = Math.max(0, (remaining[w]||0) - len);
-      covered[w] = (covered[w]||0) + use;
-    });
-
-    plan.push({
-      br_rolne: rola.br_rolne || rola.br || rola.id,
-      tip: rola.tip || "",
-      master: master,
-      metraza: len,
-      kg: num(rola.kg_neto || rola.kg || 0),
-      secenja: best.items,
-      suma: best.sum,
-      otpad: best.waste,
-      iskoriscenje: master ? (best.sum/master*100) : 0,
-      covered: covered,
-      lot: rola.lot || "",
-      lokacija: rola.lokacija || rola.palet || rola.sch || ""
-    });
-  });
-
-  var ukupnoPotrebno = potrebe.reduce(function(s,p){return s + num(p.metraza)*Math.max(1,num(p.kolicina)||1);},0);
-  var ostalo = Object.keys(remaining).reduce(function(s,k){return s+remaining[k];},0);
-  var otpadMm = plan.reduce(function(s,p){return s+p.otpad;},0);
-  return {plan:plan, remaining:remaining, pokriveno:ukupnoPotrebno-ostalo, ukupnoPotrebno:ukupnoPotrebno, otpadMm:otpadMm};
-}
-
-export default function AIsecenjeOptimizer({card, inp, lbl, msg}) {
-  var [rolne,setRolne] = useState([]);
-  var [loading,setLoading] = useState(false);
-  var [potrebe,setPotrebe] = useState([{sirina:"500",metraza:"12000",kolicina:"1"},{sirina:"400",metraza:"12000",kolicina:"1"},{sirina:"300",metraza:"12000",kolicina:"2"}]);
-  var [result,setResult] = useState(null);
-  var [filterTip,setFilterTip] = useState("");
-  var [maxPieces,setMaxPieces] = useState(10);
-
-  useEffect(function(){ ucitajRolne(); },[]);
-
-  async function ucitajRolne(){
+  async function pitajAI() {
+    var q = pitanje.trim();
+    if(!q) return;
+    
     setLoading(true);
-    try{
-      var r = await supabase.from("magacin").select("*").neq("status","Iskorišćeno").order("sirina",{ascending:false});
-      if(r.error) throw r.error;
-      setRolne(r.data||[]);
-    }catch(e){ if(msg) msg("Greška magacin: "+e.message,"err"); }
+    setOdgovor("🤖 Analiziram pitanje...");
+    
+    try {
+      var low = q.toLowerCase();
+      var result = "";
+
+      // ═══════════════════════════════════════════════════════════
+      // 📦 MAGACIN UPITI
+      // ═══════════════════════════════════════════════════════════
+      
+      if(low.includes("magacin") || low.includes("imam") || low.includes("stanje") || low.includes("roln")) {
+        var r = await supabase.from("magacin").select("*").neq("status", "Iskorišćeno");
+        if(r.error) throw r.error;
+        var data = r.data || [];
+        
+        // Ekstraktuj parametre iz pitanja
+        var materijal = "";
+        var poznati = ["bopp", "cpp", "pet", "alu", "ldpe", "papir", "cc white", "fxc", "fxpu", "opp", "pa", "nativia"];
+        for(var i=0;i<poznati.length;i++) if(low.includes(poznati[i])) materijal = poznati[i];
+        
+        var sirMatch = q.match(/(\d{3,4})\s*mm?/i);
+        var sir = sirMatch ? parseInt(sirMatch[1]) : null;
+        
+        var filtrirane = data.filter(function(x){
+          var ok = true;
+          if(materijal) ok = ok && String(x.tip||"").toLowerCase().includes(materijal);
+          if(sir) ok = ok && Math.abs(n(x.sirina) - sir) <= 25;
+          return ok;
+        });
+        
+        var kg = filtrirane.reduce(function(s,x){return s+n(x.kg_neto||x.kg||0);},0);
+        var m = filtrirane.reduce(function(s,x){return s+n(x.metraza_ost||x.metraza||0);},0);
+        var tipovi = Array.from(new Set(filtrirane.map(function(x){return x.tip;}).filter(Boolean))).slice(0,6).join(", ");
+        
+        result = "📦 MAGACIN STANJE:\n\n" +
+          "Nađeno: " + filtrirane.length + " rolni\n" +
+          "Ukupno: " + fmt(m, " m") + "\n" +
+          "Kg neto: " + fmt(kg, " kg") + "\n" +
+          (tipovi ? "Tipovi: " + tipovi : "");
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // 💰 VREDNOST MAGACINA
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.includes("vrednost") || low.includes("koliko vredi") || low.includes("cena magacin")) {
+        var rm = await supabase.from("magacin").select("*").neq("status", "Iskorišćeno");
+        if(rm.error) throw rm.error;
+        var mdata = rm.data || [];
+        
+        // Cene po tipu materijala (EUR/kg)
+        var CENE = {
+          "BOPP": 2.6, "OPP": 2.6, "CPP": 2.7, "PET": 3.1, 
+          "LDPE": 2.4, "ALU": 8.5, "PAPIR": 1.9, "PA": 4.2,
+          "FXC": 2.8, "FXPU": 2.9, "NATIVIA": 3.0,
+          "CC White": 2.2
+        };
+        
+        var ukupnaVrednost = 0;
+        var poTipu = {};
+        
+        mdata.forEach(function(x) {
+          var kg = n(x.kg_neto || x.kg || 0);
+          var cenaKg = 2.8; // default
+          
+          // Pronađi cenu po tipu
+          for(var tip in CENE) {
+            if(String(x.tip||"").toUpperCase().includes(tip)) {
+              cenaKg = CENE[tip];
+              break;
+            }
+          }
+          
+          var vrednost = kg * cenaKg;
+          ukupnaVrednost += vrednost;
+          
+          if(!poTipu[x.tip]) poTipu[x.tip] = {kg: 0, vrednost: 0};
+          poTipu[x.tip].kg += kg;
+          poTipu[x.tip].vrednost += vrednost;
+        });
+        
+        var ukKg = mdata.reduce(function(s,x){return s+n(x.kg_neto||0);},0);
+        
+        result = "💰 VREDNOST MAGACINA:\n\n" +
+          "Ukupno kg: " + fmt(ukKg, " kg") + "\n" +
+          "Ukupna vrednost: " + fmt(ukupnaVrednost, " €") + "\n" +
+          "Prosečna cena: " + (ukKg > 0 ? (ukupnaVrednost/ukKg).toFixed(2) : 0) + " €/kg\n\n" +
+          "Po tipu materijala:\n" +
+          Object.keys(poTipu).slice(0, 5).map(function(t) {
+            return "• " + t + ": " + fmt(poTipu[t].vrednost, " €") + " (" + fmt(poTipu[t].kg, " kg") + ")";
+          }).join("\n");
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // 🏆 NAJVEĆA/NAJMANJA ROLNA
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.includes("najveć") || low.includes("najmanj")) {
+        var rr = await supabase.from("magacin").select("*").neq("status", "Iskorišćeno");
+        if(rr.error) throw rr.error;
+        var rolls = rr.data || [];
+        
+        if(rolls.length === 0) {
+          result = "Nema rolni u magacinu.";
+        } else {
+          // Sortiraj po metraži
+          rolls.sort(function(a,b) {
+            return n(b.metraza_ost||b.metraza) - n(a.metraza_ost||a.metraza);
+          });
+          
+          var najveca = rolls[0];
+          var najmanja = rolls[rolls.length - 1];
+          
+          result = "🏆 EKSTREMNE ROLNE:\n\n" +
+            "Najveća rolna:\n" +
+            "• " + najveca.br_rolne + " - " + najveca.tip + " " + najveca.sirina + "mm\n" +
+            "• Metraža: " + fmt(n(najveca.metraza_ost||najveca.metraza), " m") + "\n" +
+            "• Kg: " + fmt(n(najveca.kg_neto), " kg") + "\n" +
+            "• Lokacija: " + (najveca.palet || "—") + "\n\n" +
+            "Najmanja rolna:\n" +
+            "• " + najmanja.br_rolne + " - " + najmanja.tip + " " + najmanja.sirina + "mm\n" +
+            "• Metraža: " + fmt(n(najmanja.metraza_ost||najmanja.metraza), " m") + "\n" +
+            "• Kg: " + fmt(n(najmanja.kg_neto), " kg") + "\n" +
+            "• Lokacija: " + (najmanja.palet || "—");
+        }
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // 📊 STATISTIKA PO ŠIRINAMA
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.includes("po širin") || low.includes("širine")) {
+        var rs = await supabase.from("magacin").select("*").neq("status", "Iskorišćeno");
+        if(rs.error) throw rs.error;
+        var sdata = rs.data || [];
+        
+        var poSirini = {};
+        sdata.forEach(function(x) {
+          var sir = x.sirina;
+          if(!poSirini[sir]) poSirini[sir] = {count: 0, kg: 0, m: 0};
+          poSirini[sir].count++;
+          poSirini[sir].kg += n(x.kg_neto || 0);
+          poSirini[sir].m += n(x.metraza_ost || x.metraza || 0);
+        });
+        
+        var sorted = Object.keys(poSirini).sort(function(a,b) {
+          return poSirini[b].m - poSirini[a].m;
+        });
+        
+        result = "📊 STANJE PO ŠIRINAMA:\n\n" +
+          sorted.slice(0, 10).map(function(sir) {
+            var s = poSirini[sir];
+            return sir + "mm: " + s.count + " rolni, " + fmt(s.m, " m") + ", " + fmt(s.kg, " kg");
+          }).join("\n");
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // 🔍 PRETRAGA PO LOT BROJU
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.includes("lot") && (low.match(/\d{5,}/) || low.match(/[A-Z]\d+\/\d+/))) {
+        var lotMatch = q.match(/(\d{5,}|[A-Z]\d+\/\d+)/);
+        var lotBroj = lotMatch ? lotMatch[1] : "";
+        
+        var rl = await supabase.from("magacin").select("*").ilike("lot", "%" + lotBroj + "%");
+        if(rl.error) throw rl.error;
+        var ldata = rl.data || [];
+        
+        if(ldata.length === 0) {
+          result = "🔍 Nije pronađen LOT: " + lotBroj;
+        } else {
+          var ukM = ldata.reduce(function(s,x){return s+n(x.metraza_ost||x.metraza||0);},0);
+          var ukKg = ldata.reduce(function(s,x){return s+n(x.kg_neto||0);},0);
+          
+          result = "🔍 LOT: " + lotBroj + "\n\n" +
+            "Nađeno: " + ldata.length + " rolni\n" +
+            "Ukupno: " + fmt(ukM, " m") + "\n" +
+            "Kg neto: " + fmt(ukKg, " kg") + "\n\n" +
+            "Rolne:\n" +
+            ldata.slice(0, 5).map(function(x) {
+              return "• " + x.br_rolne + " - " + x.tip + " " + x.sirina + "mm, " + 
+                fmt(n(x.metraza_ost||x.metraza), " m");
+            }).join("\n") +
+            (ldata.length > 5 ? "\n... i još " + (ldata.length - 5) + " rolni" : "");
+        }
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // 📋 RADNI NALOZI
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.includes("nalog") || low.includes("kasni") || low.includes("završ")) {
+        var rn = await supabase.from("nalozi").select("*").order("created_at", {ascending:false}).limit(200);
+        if(rn.error) throw rn.error;
+        var nd = rn.data || [];
+        
+        var otvoreni = nd.filter(function(x){return x.status !== "Završeno" && x.status !== "Zavrseno";});
+        var zav = nd.filter(function(x){return x.status === "Završeno" || x.status === "Zavrseno";});
+        
+        // Kasne (pretpostavljamo da je rok 7 dana)
+        var danas = new Date();
+        var kasne = otvoreni.filter(function(x) {
+          if(!x.created_at) return false;
+          var created = new Date(x.created_at);
+          var diff = (danas - created) / (1000 * 60 * 60 * 24);
+          return diff > 7;
+        });
+        
+        result = "📋 RADNI NALOZI:\n\n" +
+          "Ukupno: " + nd.length + " naloga\n" +
+          "Otvoreni: " + otvoreni.length + "\n" +
+          "Završeni: " + zav.length + "\n" +
+          "⚠️ Kasne (>7 dana): " + kasne.length + "\n\n";
+        
+        if(kasne.length > 0) {
+          result += "Nalozi koji kasne:\n" +
+            kasne.slice(0, 5).map(function(x) {
+              var created = new Date(x.created_at);
+              var dana = Math.floor((danas - created) / (1000 * 60 * 60 * 24));
+              return "• " + (x.ponBr || x.br || "—") + " - " + (x.kupac || "—") + " (" + dana + " dana)";
+            }).join("\n");
+        }
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // 🎯 ŠIFRIRANA PRETRAGA (npr. "R-2026-7553927")
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.match(/r-\d{4}-\d{5,}/)) {
+        var brRolne = q.match(/R-\d{4}-\d{5,}/i)[0];
+        
+        var rr = await supabase.from("magacin").select("*").eq("br_rolne", brRolne).single();
+        
+        if(rr.data) {
+          var x = rr.data;
+          result = "🎯 ROLNA: " + x.br_rolne + "\n\n" +
+            "Tip: " + x.tip + " " + (x.deb > 0 ? x.deb + "µ" : "") + "\n" +
+            "Širina: " + x.sirina + "mm\n" +
+            "Metraža ostalo: " + fmt(n(x.metraza_ost||x.metraza), " m") + "\n" +
+            (x.metraza ? "Metraža ukupno: " + fmt(n(x.metraza), " m") + "\n" : "") +
+            "Kg neto: " + fmt(n(x.kg_neto), " kg") + "\n" +
+            (x.lot ? "LOT: " + x.lot + "\n" : "") +
+            (x.palet ? "Lokacija: " + x.palet + "\n" : "") +
+            (x.dobavljac ? "Dobavljač: " + x.dobavljac + "\n" : "") +
+            "Status: " + x.status;
+        } else {
+          result = "❌ Rolna " + brRolne + " nije pronađena.";
+        }
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // 🔥 TOP 10 NAJVEĆIH ROLNI
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.includes("top") || low.includes("najvećih")) {
+        var rt = await supabase.from("magacin").select("*").neq("status", "Iskorišćeno");
+        if(rt.error) throw rt.error;
+        var tdata = rt.data || [];
+        
+        tdata.sort(function(a,b) {
+          return n(b.metraza_ost||b.metraza) - n(a.metraza_ost||a.metraza);
+        });
+        
+        result = "🔥 TOP 10 NAJVEĆIH ROLNI:\n\n" +
+          tdata.slice(0, 10).map(function(x, i) {
+            return (i+1) + ". " + x.br_rolne + " - " + x.tip + " " + x.sirina + "mm\n" +
+              "   " + fmt(n(x.metraza_ost||x.metraza), " m") + ", " + fmt(n(x.kg_neto), " kg") +
+              (x.palet ? ", " + x.palet : "");
+          }).join("\n");
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // 📍 PRETRAGA PO LOKACIJI
+      // ═══════════════════════════════════════════════════════════
+      
+      else if(low.includes("lokacij") || low.includes("palet")) {
+        var lokMatch = q.match(/([A-Z0-9]+)/);
+        var lokacija = lokMatch ? lokMatch[1] : "";
+        
+        var rlok = await supabase.from("magacin").select("*").ilike("palet", "%" + lokacija + "%").neq("status", "Iskorišćeno");
+        if(rlok.error) throw rlok.error;
+        var lokdata = rlok.data || [];
+        
+        if(lokdata.length === 0) {
+          result = "📍 Nema rolni na lokaciji: " + lokacija;
+        } else {
+          result = "📍 LOKACIJA: " + lokacija + "\n\n" +
+            "Nađeno: " + lokdata.length + " rolni\n\n" +
+            lokdata.slice(0, 8).map(function(x) {
+              return "• " + x.br_rolne + " - " + x.tip + " " + x.sirina + "mm, " +
+                fmt(n(x.metraza_ost||x.metraza), " m");
+            }).join("\n") +
+            (lokdata.length > 8 ? "\n... i još " + (lokdata.length - 8) + " rolni" : "");
+        }
+      }
+      
+      // ═══════════════════════════════════════════════════════════
+      // ❓ DEFAULT - POMOĆ
+      // ═══════════════════════════════════════════════════════════
+      
+      else {
+        result = "🤖 DOSTUPNE KOMANDE:\n\n" +
+          "📦 MAGACIN:\n" +
+          "• Koliko imam BOPP 1000mm?\n" +
+          "• Koliko imam rolni u magacinu?\n" +
+          "• Koliko imam FXC?\n\n" +
+          "💰 VREDNOST:\n" +
+          "• Kolika je vrednost magacina?\n" +
+          "• Koliko vredi?\n\n" +
+          "🏆 EKSTREMNE VREDNOSTI:\n" +
+          "• Koja je najveća rolna?\n" +
+          "• Koja je najmanja rolna?\n\n" +
+          "📊 STATISTIKA:\n" +
+          "• Prikaži po širinama\n" +
+          "• Top 10 najvećih rolni\n\n" +
+          "🔍 PRETRAGA:\n" +
+          "• LOT 136180\n" +
+          "• R-2026-7553927\n" +
+          "• Lokacija B5\n\n" +
+          "📋 NALOZI:\n" +
+          "• Koliko ima otvorenih naloga?\n" +
+          "• Koliko kasni?";
+      }
+      
+      setOdgovor(result);
+      
+      // Dodaj u istoriju
+      setHistory(function(prev) {
+        return [{q: pitanje, a: result}, ...prev].slice(0, 10);
+      });
+      
+    } catch(e) {
+      setOdgovor("❌ Greška: " + e.message);
+    }
+    
     setLoading(false);
   }
 
-  function upd(i,k,v){ setPotrebe(potrebe.map(function(p,j){ return i===j ? Object.assign({},p,{[k]:v}) : p; })); }
-  function dodaj(){ setPotrebe(potrebe.concat([{sirina:"",metraza:"",kolicina:"1"}])); }
-  function ukloni(i){ setPotrebe(potrebe.filter(function(_,j){return i!==j;})); }
-
-  function pokreni(){
-    var source = rolne.filter(function(r){ return !filterTip || String(r.tip||"").toLowerCase().includes(filterTip.toLowerCase()); });
-    var res = napraviPlan(source, potrebe, num(maxPieces)||10);
-    setResult(res);
-    if(msg) msg("Plan sečenja izračunat u browseru");
-  }
-
-  var tipovi = Array.from(new Set(rolne.map(function(r){return r.tip;}).filter(Boolean))).sort();
-  var ukupnoKg = rolne.reduce(function(s,r){return s+num(r.kg_neto||r.kg||0);},0);
-  var ukupnoM = rolne.reduce(function(s,r){return s+num(r.metraza_ost||r.metraza||0);},0);
-
   return (
-    <div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:18}}>
+    <div style={Object.assign({}, card||{}, {background:"#fff",borderRadius:14,padding:18,border:"1px solid #e2e8f0",marginBottom:16})}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:10}}>
         <div>
-          <h2 style={{margin:0,fontSize:22,fontWeight:900}}>🧠 Optimizacija sečenja</h2>
-          <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Radi direktno u aplikaciji — bez lokalnog Python servera.</div>
+          <div style={{fontSize:18,fontWeight:900,color:"#0f172a"}}>🤖 AI Asistent MEGA</div>
+          <div style={{fontSize:13,color:"#64748b",marginTop:2}}>20+ komandi za magacin, naloge, statistiku i više!</div>
         </div>
-        <button onClick={ucitajRolne} style={{padding:"9px 14px",borderRadius:9,border:"1px solid #dbe3ef",background:"#fff",fontWeight:800,cursor:"pointer"}}>↻ Osveži rolne</button>
+        <div style={{fontSize:11,fontWeight:800,color:"#1d4ed8",background:"#eff6ff",padding:"5px 10px",borderRadius:999}}>UPGRADED</div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginBottom:16}}>
-        <div style={Object.assign({},card,{borderLeft:"4px solid #1d4ed8"})}><div style={{fontSize:26}}>📦</div><div style={{fontSize:26,fontWeight:900,color:"#1d4ed8"}}>{rolne.length}</div><div style={{fontSize:12,color:"#64748b"}}>Rolni dostupno</div></div>
-        <div style={Object.assign({},card,{borderLeft:"4px solid #059669"})}><div style={{fontSize:26}}>📏</div><div style={{fontSize:26,fontWeight:900,color:"#059669"}}>{fmt(ukupnoM)} m</div><div style={{fontSize:12,color:"#64748b"}}>Ukupno metara</div></div>
-        <div style={Object.assign({},card,{borderLeft:"4px solid #7c3aed"})}><div style={{fontSize:26}}>⚖️</div><div style={{fontSize:26,fontWeight:900,color:"#7c3aed"}}>{fmt(ukupnoKg)} kg</div><div style={{fontSize:12,color:"#64748b"}}>Ukupno kg</div></div>
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <input
+          placeholder="Npr: Kolika je vrednost magacina? ili Top 10 najvećih rolni"
+          value={pitanje}
+          onChange={function(e){setPitanje(e.target.value);}}
+          onKeyDown={function(e){if(e.key==="Enter")pitajAI();}}
+          style={{flex:1,padding:"11px 12px",borderRadius:10,border:"1px solid #dbe3ef",fontSize:14,outline:"none"}}
+        />
+        <button onClick={pitajAI} disabled={loading} style={{padding:"11px 16px",borderRadius:10,border:"none",background:loading?"#94a3b8":"#1d4ed8",color:"#fff",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>
+          {loading ? "⏳ Tražim..." : "🤖 Pitaj"}
+        </button>
       </div>
 
-      <div style={Object.assign({},card,{marginBottom:16})}>
-        <div style={{fontSize:15,fontWeight:900,marginBottom:12}}>Potrebne trake</div>
-        {potrebe.map(function(p,i){return(
-          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 36px",gap:8,marginBottom:8,alignItems:"end"}}>
-            <div><label style={lbl}>Širina mm</label><input style={inp} type="number" value={p.sirina} onChange={function(e){upd(i,"sirina",e.target.value);}}/></div>
-            <div><label style={lbl}>Metraža po roli</label><input style={inp} type="number" value={p.metraza} onChange={function(e){upd(i,"metraza",e.target.value);}}/></div>
-            <div><label style={lbl}>Količina</label><input style={inp} type="number" value={p.kolicina} onChange={function(e){upd(i,"kolicina",e.target.value);}}/></div>
-            <button onClick={function(){ukloni(i);}} style={{height:38,border:"1px solid #fecaca",background:"#fef2f2",color:"#ef4444",borderRadius:8,fontWeight:900,cursor:"pointer"}}>×</button>
-          </div>
-        );})}
-        <div style={{display:"flex",gap:10,alignItems:"end",marginTop:12,flexWrap:"wrap"}}>
-          <button onClick={dodaj} style={{padding:"10px 14px",borderRadius:9,border:"1px solid #dbe3ef",background:"#fff",fontWeight:800,cursor:"pointer"}}>+ Dodaj traku</button>
-          <div><label style={lbl}>Filter materijala</label><select style={Object.assign({},inp,{minWidth:180})} value={filterTip} onChange={function(e){setFilterTip(e.target.value);}}><option value="">Svi materijali</option>{tipovi.map(function(t){return <option key={t} value={t}>{t}</option>;})}</select></div>
-          <div><label style={lbl}>Max traka u kombinaciji</label><input style={Object.assign({},inp,{width:110})} type="number" value={maxPieces} onChange={function(e){setMaxPieces(e.target.value);}}/></div>
-          <button onClick={pokreni} disabled={loading} style={{padding:"11px 20px",borderRadius:9,border:"none",background:"#7c3aed",color:"#fff",fontWeight:900,cursor:"pointer"}}>🧠 Optimizuj</button>
-        </div>
+      {/* Quick buttons */}
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+        {[
+          "Vrednost magacina",
+          "Top 10",
+          "Po širinama",
+          "Otvoreni nalozi",
+          "Najveća rolna"
+        ].map(function(cmd) {
+          return (
+            <button
+              key={cmd}
+              onClick={function(){setPitanje(cmd);}}
+              style={{
+                padding:"6px 12px",
+                borderRadius:8,
+                border:"1px solid #e2e8f0",
+                background:"#f8fafc",
+                fontSize:12,
+                fontWeight:700,
+                cursor:"pointer",
+                color:"#64748b"
+              }}
+            >
+              {cmd}
+            </button>
+          );
+        })}
       </div>
 
-      {result && (
-        <div>
-          <div style={Object.assign({},card,{background:"#ecfdf5",border:"1px solid #bbf7d0",marginBottom:16})}>
-            <div style={{fontSize:13,color:"#166534",fontWeight:900,textTransform:"uppercase"}}>Rezultat</div>
-            <div style={{fontSize:22,fontWeight:900,color:"#064e3b",marginTop:4}}>Pokriveno {fmt(result.pokriveno)} m od {fmt(result.ukupnoPotrebno)} m</div>
-            <div style={{fontSize:13,color:"#166534",marginTop:4}}>Korišćeno rolni: <b>{result.plan.length}</b> · Ukupan otpad po kombinacijama: <b>{result.otpadMm} mm</b></div>
-          </div>
-
-          {Object.keys(result.remaining).some(function(k){return result.remaining[k]>0;}) && <div style={Object.assign({},card,{background:"#fff7ed",border:"1px solid #fed7aa",marginBottom:16})}><b>⚠️ Nepokriveno:</b> {Object.keys(result.remaining).filter(function(k){return result.remaining[k]>0;}).map(function(k){return k+"mm: "+fmt(result.remaining[k])+"m";}).join(" · ")}</div>}
-
-          {result.plan.map(function(p,idx){return(
-            <div key={idx} style={Object.assign({},card,{marginBottom:12})}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,gap:10}}>
-                <div><div style={{fontSize:12,color:"#64748b",fontWeight:800}}>Matična rola</div><div style={{fontSize:16,fontWeight:900,color:"#1d4ed8"}}>{p.br_rolne} · {p.tip} · {p.master}mm</div></div>
-                <div style={{textAlign:"right"}}><div style={{fontSize:12,color:"#64748b",fontWeight:800}}>Iskorišćenost</div><div style={{fontSize:22,fontWeight:900,color:p.iskoriscenje>95?"#059669":"#f59e0b"}}>{p.iskoriscenje.toFixed(2)}%</div></div>
+      {odgovor && (
+        <pre style={{
+          whiteSpace:"pre-wrap",
+          fontFamily:"inherit",
+          marginTop:12,
+          background:"#f8fafc",
+          border:"1px solid #e2e8f0",
+          borderRadius:10,
+          padding:12,
+          fontSize:13,
+          color:"#334155",
+          lineHeight:1.5
+        }}>{odgovor}</pre>
+      )}
+      
+      {/* History */}
+      {history.length > 0 && (
+        <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #e2e8f0"}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:8}}>📜 Istorija (poslednih {history.length})</div>
+          {history.slice(0, 3).map(function(h, i) {
+            return (
+              <div key={i} style={{marginBottom:8,cursor:"pointer"}} onClick={function(){setPitanje(h.q);}}>
+                <div style={{fontSize:11,color:"#94a3b8"}}>💬 {h.q}</div>
               </div>
-              <div style={{height:58,border:"1px solid #cbd5e1",borderRadius:10,overflow:"hidden",display:"flex",background:"#fee2e2"}}>
-                {p.secenja.map(function(w,i){return <div key={i} style={{width:(w/p.master*100)+"%",background:"#dbeafe",borderRight:"1px solid #93c5fd",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#1e40af"}}>{w}mm</div>;})}
-                {p.otpad>0 && <div style={{width:(p.otpad/p.master*100)+"%",background:"#fecaca",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,color:"#991b1b"}}>Otpad {p.otpad}</div>}
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:8,marginTop:10,fontSize:12}}>
-                <div style={{background:"#f8fafc",padding:9,borderRadius:8}}><b>Plan:</b><br/>{p.secenja.join(" + ")}</div>
-                <div style={{background:"#f8fafc",padding:9,borderRadius:8}}><b>Metraža:</b><br/>{fmt(p.metraza)} m</div>
-                <div style={{background:"#f8fafc",padding:9,borderRadius:8}}><b>Otpad:</b><br/>{p.otpad} mm</div>
-                <div style={{background:"#f8fafc",padding:9,borderRadius:8}}><b>LOT/Lokacija:</b><br/>{p.lot || "—"} {p.lokacija ? " · "+p.lokacija : ""}</div>
-              </div>
-            </div>
-          );})}
+            );
+          })}
         </div>
       )}
     </div>

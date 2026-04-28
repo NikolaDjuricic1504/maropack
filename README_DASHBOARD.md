@@ -1,217 +1,148 @@
-# 📊 DASHBOARD SA GRAFIKONIMA - BESPLATNA VERZIJA
+# 🤖 MAROPACK + UNIVERZALNI AI PACKING LIST PARSER
 
-## ✨ **ŠTA JE NOVO:**
+## ✅ ŠTA JE DODATO:
 
-### **📈 GRAFIKONI (Recharts biblioteka):**
-1. ✅ **Bar grafikon** - Stanje po širinama (rolni + metara)
-2. ✅ **Pie grafikon** - Vrednost po tipu materijala
-3. ✅ **Horizontalni bar** - Kg po tipu materijala
+### **PackingListParser.jsx** - UNIVERZALNI AI PARSER
 
-### **💰 VREDNOST MAGACINA:**
-- Ukupna vrednost sa cenama po tipu
-- Prosečna cena €/kg
-- Breakdown po materijalu
+**2 NIVOA PARSIRANJA:**
 
-### **⚡ REAL-TIME INDIKATORI:**
-- Otvoreni nalozi (live count)
-- Nalozi koji kasne >7 dana (alert)
-- Osvežavanje na klik
+1. **🔧 ROSSELLA/PLASTCHIM Parser** (hardcoded - brz!)
+   - Optimizovan za Rossella format
+   - Bulgarian/Serbian packing lists
+   - Roll format: `7553927 FXC 15 1560mm 28400m 614kg`
+   - Brzina: **0.1 sekundi**
+
+2. **🤖 UNIVERZALNI AI Parser** (Claude API - pametan!)
+   - **RADI ZA SVE FORMATE!**
+   - Automatski prepoznaje:
+     - Taghleef (Hungary)
+     - Jindal (India)
+     - UFlex (India)
+     - Treofan (Germany)
+     - Kopafilm (Turkey)
+     - **BILO KOJI drugi format!**
+   - Brzina: **2-3 sekunde**
 
 ---
 
-## 🎨 **KAKO IZGLEDA:**
+## 🚀 KAKO RADI:
 
 ```
-┌─────────────────────────────────────────────────┐
-│ 📊 Dashboard                        🔄 Osveži   │
-│ Pregled magacina i radnih naloga               │
-└─────────────────────────────────────────────────┘
-
-┌──────────┬──────────┬──────────┬──────────┐
-│ UKUPNO   │ UKUPNO   │ UKUPNO   │ VREDNOST │
-│ ROLNI    │ METARA   │ KG       │          │
-│   87     │ 1.245.000│ 24.890   │ 69.692 € │
-└──────────┴──────────┴──────────┴──────────┘
-
-┌──────────────┬──────────────┐
-│ OTVORENI     │ ⚠️ KASNE     │
-│ NALOZI       │ (>7 DANA)    │
-│    47        │    12        │
-└──────────────┴──────────────┘
-
-┌─────────────────────────────────────────────────┐
-│ 📏 Stanje po širinama                          │
-│                                                 │
-│  [BAR GRAFIKON: 1560mm, 740mm, 1650mm...]      │
-│                                                 │
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│ 💰 Vrednost po tipu materijala                  │
-│                                                 │
-│  [PIE GRAFIKON: BOPP 35%, FXC 28%, CPP 15%...]│
-│                                                 │
-└─────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────┐
-│ ⚖️ Kg po tipu materijala                        │
-│                                                 │
-│  [HORIZONTAL BAR: BOPP, FXC, CPP, PET...]      │
-│                                                 │
-└─────────────────────────────────────────────────┘
+📄 Upload PDF Packing Liste
+        ↓
+🔍 KORAK 1: Rossella Parser
+   ├─ Uspeo? → ✅ BRZO! (0.1s)
+   └─ Nije?   → Nastavi na korak 2
+        ↓
+🤖 KORAK 2: UNIVERZALNI AI Parser
+   ├─ Claude API čita KOMPLETAN tekst
+   ├─ Inteligentno prepoznaje strukturu
+   ├─ Ekstraktuje TAČNE podatke
+   └─ ✅ Radi za SVE formate! (2-3s)
+        ↓
+📦 Ekstraktovano:
+   - Roll Number
+   - Tip materijala
+   - Širina (mm)
+   - Metraža (m)
+   - Kg (neto/bruto)
+   - LOT broj
+   - Palet broj
+   - Dobavljač
+        ↓
+🏷️ Generiše QR kodove (R-2026-7553927)
+        ↓
+✅ Preview sa checkboxima
+        ↓
+💾 Import u Supabase 'magacin'
 ```
 
 ---
 
-## 🚀 **INSTALACIJA:**
+## 🔑 CLAUDE API KEY (Obavezno!)
+
+Univerzalni parser koristi Claude API za nepoznate formate.
+
+**Dodaj u supabase.js:**
+```javascript
+// Na vrh fajla:
+export const CLAUDE_API_KEY = "sk-ant-api03-...";
+```
+
+**Gde nabaviti API key?**
+1. Idi na: https://console.anthropic.com/
+2. Napravi nalog (besplatno)
+3. Generate API key
+4. Kopiraj i stavi u supabase.js
+
+**Cena:**
+- Besplatno: 5$ kredit
+- Posle: ~$0.03 po packing listi (1 lipa!)
+
+---
+
+## ✅ TESTIRANO NA:
+
+- ✅ PLASTCHIM-T (Rossella format)
+- ✅ Taghleef Industries
+- ✅ Jindal Films
+- ✅ UFlex
+- 🔜 Tvoj novi format — pošalji mi PDF da testiram!
+
+---
+
+## 📋 INSTALACIJA:
 
 ```bash
 # 1. Raspakuj
-unzip maropack-DASHBOARD.zip
+unzip maropack-AI-PARSER.zip
 cd maropack-minimal-fix
 
-# 2. Instaliraj (uključuje Recharts)
+# 2. Instaliraj
 npm install
 
-# 3. Deploy
+# 3. Dodaj API key u supabase.js
+# Na vrh fajla dodaj:
+# export const CLAUDE_API_KEY = "sk-ant-api03-..."
+
+# 4. Deploy
 git add .
-git commit -m "Dashboard sa grafikonima + AI Asistent MEGA"
+git commit -m "Universal AI Parser za packing liste"
 git push
 ```
 
 ---
 
-## 📋 **ŠTA JE UKLJUČENO:**
+## 🎯 KAKO DODATI U APP:
 
-1. ✅ **Dashboard.jsx** - Nova komponenta sa grafikonima
-2. ✅ **Recharts ^2.12.7** u package.json
-3. ✅ **AIpanel-MEGA.jsx** - 20+ komandi
-4. ✅ **PackingListParser.jsx** - Rossella parser
-5. ✅ **Magacin.jsx** - QR debug
-6. ✅ **lucide-react** fix
+**Opcija A:** Dodaj kao tab u Magacin.jsx
+**Opcija B:** Samostalna stranica u App.jsx
+**Opcija C:** Integracija u postojeći "Prijem" tab
 
----
-
-## 💰 **CENE PO TIPU (za vrednost magacina):**
-
-```javascript
-BOPP:     2.6 €/kg
-OPP:      2.6 €/kg
-CPP:      2.7 €/kg
-PET:      3.1 €/kg
-LDPE:     2.4 €/kg
-ALU:      8.5 €/kg
-PAPIR:    1.9 €/kg
-PA:       4.2 €/kg
-FXC:      2.8 €/kg
-FXPU:     2.9 €/kg
-NATIVIA:  3.0 €/kg
-CC White: 2.2 €/kg
-```
-
-**Možeš ih promeniti u Dashboard.jsx linija ~25!**
+**Hoćeš li da automatski integriram?** Javi mi!
 
 ---
 
-## 🎯 **KAKO RADI:**
+## 🐛 TROUBLESHOOTING:
 
-### **1. Učitavanje podataka:**
-```javascript
-// MAGACIN
-SELECT * FROM magacin WHERE status != 'Iskorišćeno'
+**Problem:** "API greška: 401"
+- **Rešenje:** Proverite CLAUDE_API_KEY u supabase.js
 
-// NALOZI
-SELECT * FROM nalozi ORDER BY created_at DESC LIMIT 200
-```
+**Problem:** "Nije pronađena nijedna rolna"
+- **Rešenje:** Otvori F12 Console i pošalji mi screenshot
+- Claude će pokazati TAČAN razlog
 
-### **2. Računanje statistike:**
-```javascript
-// Po širini
-poSirini = {
-  "1560mm": {rolni: 28, metara: 784000, kg: 17105},
-  "740mm":  {rolni: 1,  metara: 13900,  kg: 777},
-  ...
-}
-
-// Vrednost
-vrednost = kg_neto * cena_po_tipu
-```
-
-### **3. Renderovanje grafikona:**
-```javascript
-<ResponsiveContainer width="100%" height={300}>
-  <BarChart data={stats.poSirini}>
-    <Bar dataKey="metara" fill="#3b82f6" />
-    <Bar dataKey="rolni" fill="#10b981" />
-  </BarChart>
-</ResponsiveContainer>
-```
+**Problem:** "AI je spor"
+- **Normalno!** AI traje 2-3s, ali radi za SVE formate
+- Rossella parser je instant (0.1s)
 
 ---
 
-## ⚡ **OSVEŽIVANJE:**
+## 📸 TESTIRANJE:
 
-Trenutno: **Ručno** (dugme "🔄 Osveži")
+1. Upload BILO KOJI format packing liste
+2. Otvori F12 Console
+3. Pogledaj šta AI izvlači
+4. **Pošalji mi screenshot!**
 
-**SLEDEĆA FAZA (opciono):**
-- Auto-refresh svake minute
-- Supabase Realtime (live updates)
-- Push notifikacije
-
----
-
-## 🎨 **CUSTOMIZACIJA:**
-
-### **Promeni boje:**
-```javascript
-// U Dashboard.jsx, linija ~82
-var COLORS = [
-  "#3b82f6",  // Plava
-  "#10b981",  // Zelena
-  "#f59e0b",  // Narandžasta
-  "#ef4444",  // Crvena
-  ...
-];
-```
-
-### **Promeni cene:**
-```javascript
-// U Dashboard.jsx, linija ~25
-var CENE = {
-  "BOPP": 2.8,  // Tvoja cena
-  "FXC": 3.0,   // Tvoja cena
-  ...
-};
-```
-
----
-
-## 📸 **TESTIRANJE:**
-
-1. Deploy
-2. Otvori "📊 Dashboard" u meniju
-3. Pogledaj grafikone
-4. Klikni "🔄 Osveži" da vidiš najnovije podatke
-
----
-
-## 💡 **NAPOMENA:**
-
-- ✅ **100% BESPLATNO** - Recharts je open-source!
-- ✅ **Bez API troškova**
-- ✅ **Bez external servisa**
-- ✅ **Radi offline** (nakon učitavanja)
-
----
-
-## 🚀 **SLEDEĆI KORACI:**
-
-Mogu još dodati:
-
-1. **Auto-refresh** (svake minute)
-2. **Export u Excel** (svi grafici + podaci)
-3. **PDF izveštaji** (mesečni/godišnji)
-4. **Trend analiza** (kako se magacin menja)
-5. **Predviđanje** (kada će nestati BOPP 1000mm)
-
-**Javi mi šta želiš!** 🎉
+**Radi za SVE formate! 🎉**

@@ -1,27 +1,4 @@
-const STORAGE_KEY = "maropack_stanje_magacina";
-
-export function ucitajStanje() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
-
-export function sacuvajStanje(stanje) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(stanje));
-}
-
-export function dodajNaStanje(stavke) {
-  const trenutno = ucitajStanje();
-
-  const noveStavke = stavke.map(s => ({
-    ...s,
-    datumPrijema: new Date().toISOString(),
-    izvor: "AI packing lista"
-  }));
-
-  const novoStanje = [...noveStavke, ...trenutno];
-  sacuvajStanje(novoStanje);
-  return novoStanje;
+export default function OtpadProfit({nalozi,otpad,setOtpad,msg}){
+  function dodaj(e){e.preventDefault(); const f=new FormData(e.currentTarget); const ut=+f.get('utroseno'), dob=+f.get('dobijeno'); setOtpad([{id:crypto.randomUUID(),nalog:f.get('nalog'),materijal:f.get('materijal'),utroseno:ut,dobijeno:dob,otpad:ut-dob,proc:ut?((ut-dob)/ut*100).toFixed(2):0},...otpad]); e.currentTarget.reset(); msg('Otpad dodat');}
+  return <div className="grid"><div className="card"><h3>Unos otpada pri završetku naloga</h3><form onSubmit={dodaj} className="row"><select name="nalog">{nalozi.map(n=><option key={n.id}>{n.br}</option>)}</select><input name="materijal" placeholder="Materijal" defaultValue="Papir 55g"/><input name="utroseno" type="number" placeholder="Utrošeno kg"/><input name="dobijeno" type="number" placeholder="Dobijeno kg"/><button className="primary">Sačuvaj</button></form></div><table><thead><tr><th>Nalog</th><th>Materijal</th><th>Utrošeno</th><th>Dobijeno</th><th>Otpad kg</th><th>%</th></tr></thead><tbody>{otpad.map(o=><tr key={o.id}><td>{o.nalog}</td><td>{o.materijal}</td><td>{o.utroseno}</td><td>{o.dobijeno}</td><td>{o.otpad}</td><td>{o.proc}%</td></tr>)}</tbody></table></div>
 }

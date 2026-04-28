@@ -2,49 +2,32 @@ import { useState, useRef } from "react";
 import { LOGO_B64 } from "./constants.js";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { supabase } from "./supabase.js";
 
 const dnow = () => new Date().toLocaleDateString("sr-RS");
 
-export default function NalogPerforacija({ nalog, onClose, msg }) {
+export default function NalogKesa({ nalog, onClose }) {
   const printRef = useRef(null);
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   const [datumPor, setDatumPor] = useState(nalog.datum || dnow());
   const [datumIsp, setDatumIsp] = useState("");
   const [brPor, setBrPor] = useState("");
-  const [oblikPerf, setOblikPerf] = useState("");
-  const [orijPerf, setOrijPerf] = useState("Poprečna");
-  const [dimPerf, setDimPerf] = useState("");
-  const [razmakPerf, setRazmakPerf] = useState("");
-  const [brTraka, setBrTraka] = useState("");
-  const [smerOdm, setSmerOdm] = useState("Na noge");
-  const [hilzna, setHilzna] = useState("76 mm");
-  const [precnikRolne, setPrecnikRolne] = useState("");
-  const [napomena, setNapomena] = useState(nalog.nap || "");
+  const [pakovanje, setPakovanje] = useState("");
+  const [dimKutije, setDimKutije] = useState("");
+  const [paletno, setPaletno] = useState("");
+  const [napomena, setNapomena] = useState(nalog.nap || "Ne sme duža klapna, čvrsti, jaki i čisti savovi bez vlakana po ivicama");
   const [napOperatera, setNapOperatera] = useState("");
-  const [crtezLink, setCrtezLink] = useState(nalog.link_perforacija || null);
+  const [skartStampa, setSkartStampa] = useState("");
+  const [skartTehnol, setSkartTehnol] = useState("");
 
-  const mats = (nalog.mats || []).filter(m => m.tip);
+  const kesa = nalog.kesaData || {};
   const res = nalog.res || {};
-  const BOJE = ["#1d4ed8", "#7c3aed", "#0891b2", "#059669"];
-  const SLOJ = ["A", "B", "C", "D"];
 
-  async function uploadCrtez(file) {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const ext = file.name.split('.').pop();
-      const path = "nalog_" + nalog.id + "/perf_crtez_" + Date.now() + "." + ext;
-      const { error: upErr } = await supabase.storage.from('maropack-files').upload(path, file);
-      if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from('maropack-files').getPublicUrl(path);
-      setCrtezLink(urlData.publicUrl);
-      if (msg) msg("Crtež uploadovan!");
-    } catch (e) { if (msg) msg("Greška upload: " + e.message, "err"); }
-    setUploading(false);
-  }
+  // Izračunaj vreme izrade
+  const takta = kesa.takta || 100;
+  const ban = kesa.ban || 1;
+  const kolKom = nalog.kol || 0;
+  const vremeIzrade = kolKom > 0 ? ((kolKom / takta / ban) / 60).toFixed(1) : "—";
 
   async function downloadPDF() {
     if (!printRef.current) return;
@@ -56,7 +39,7 @@ export default function NalogPerforacija({ nalog, onClose, msg }) {
       const pdfW = pdf.internal.pageSize.getWidth();
       const pdfH = (canvas.height * pdfW) / canvas.width;
       pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-      pdf.save("Nalog-Perforacija-" + nalog.ponBr + ".pdf");
+      pdf.save("Nalog-Kesa-" + nalog.ponBr + ".pdf");
     } catch (e) { console.error(e); }
     setLoading(false);
   }
@@ -67,12 +50,14 @@ export default function NalogPerforacija({ nalog, onClose, msg }) {
   const fieldLabel = { fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 };
   const fieldVal = { fontSize: 12, fontWeight: 600, color: "#0f172a" };
 
+  const DA_NE = v => v === "DA" || v === true || v === 1 ? "DA" : "NE";
+
   return (
     <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 10000, overflow: "auto", padding: 20 }}>
       {/* Toolbar */}
       <div style={{ background: "#0f172a", borderRadius: 10, padding: "10px 16px", marginBottom: 12, display: "flex", gap: 10, alignItems: "center", position: "sticky", top: 0, zIndex: 1 }}>
-        <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, flex: 1 }}>🔵 Nalog za perforaciju · {nalog.ponBr}</div>
-        <button onClick={() => window.print()} style={{ padding: "7px 16px", borderRadius: 7, border: "none", background: "#8b5cf6", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>🖨️ Štampaj</button>
+        <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, flex: 1 }}>🛍️ Radni nalog — Kesa · {nalog.ponBr}</div>
+        <button onClick={() => window.print()} style={{ padding: "7px 16px", borderRadius: 7, border: "none", background: "#059669", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>🖨️ Štampaj</button>
         <button onClick={downloadPDF} style={{ padding: "7px 16px", borderRadius: 7, border: "none", background: "#1d4ed8", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: loading ? 0.7 : 1 }}>
           {loading ? "⏳..." : "⬇️ PDF"}
         </button>
@@ -81,47 +66,15 @@ export default function NalogPerforacija({ nalog, onClose, msg }) {
 
       {/* Ručna polja */}
       <div style={{ background: "#fff", borderRadius: 10, padding: 16, marginBottom: 12, border: "1px solid #e2e8f0" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: "#8b5cf6" }}>✏️ Unesi podatke pre štampe</div>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12, color: "#059669" }}>✏️ Unesi podatke pre štampe</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
           <div><label style={lbl}>Datum porudžbine</label><input style={inp} value={datumPor} onChange={e => setDatumPor(e.target.value)} /></div>
           <div><label style={lbl}>Datum isporuke</label><input style={inp} value={datumIsp} onChange={e => setDatumIsp(e.target.value)} /></div>
           <div><label style={lbl}>Br. porudžbine</label><input style={inp} value={brPor} onChange={e => setBrPor(e.target.value)} /></div>
-          <div><label style={lbl}>Oblik perforacije</label><input style={inp} value={oblikPerf} onChange={e => setOblikPerf(e.target.value)} placeholder="npr. Okrugla, Ovalna..." /></div>
-          <div><label style={lbl}>Orijentacija</label>
-            <select style={inp} value={orijPerf} onChange={e => setOrijPerf(e.target.value)}>
-              <option>Poprečna</option><option>Uzdužna</option><option>Dijagonalna</option>
-            </select>
-          </div>
-          <div><label style={lbl}>Dimenzije perforacije</label><input style={inp} value={dimPerf} onChange={e => setDimPerf(e.target.value)} placeholder="npr. ø6mm" /></div>
-          <div><label style={lbl}>Razmak između perf. mm</label><input style={inp} value={razmakPerf} onChange={e => setRazmakPerf(e.target.value)} /></div>
-          <div><label style={lbl}>Br. traka po širini</label><input style={inp} value={brTraka} onChange={e => setBrTraka(e.target.value)} /></div>
-          <div><label style={lbl}>Smer odmotavanja</label>
-            <select style={inp} value={smerOdm} onChange={e => setSmerOdm(e.target.value)}>
-              <option>Na noge</option><option>Na glavu</option><option>Levo</option><option>Desno</option>
-            </select>
-          </div>
-          <div><label style={lbl}>Hilzna</label><input style={inp} value={hilzna} onChange={e => setHilzna(e.target.value)} /></div>
-          <div><label style={lbl}>Prečnik finalne rolne</label><input style={inp} value={precnikRolne} onChange={e => setPrecnikRolne(e.target.value)} /></div>
+          <div><label style={lbl}>Pakovanje</label><input style={inp} value={pakovanje} onChange={e => setPakovanje(e.target.value)} placeholder="npr. U bunt 200 kom" /></div>
+          <div><label style={lbl}>Dim. kutije / prečnik rolne</label><input style={inp} value={dimKutije} onChange={e => setDimKutije(e.target.value)} /></div>
+          <div><label style={lbl}>Paletno pakovanje</label><input style={inp} value={paletno} onChange={e => setPaletno(e.target.value)} /></div>
         </div>
-
-        {/* Upload crteža */}
-        <div style={{ marginTop: 12, padding: 12, background: "#f8f5ff", borderRadius: 8, border: "1px solid #ddd6fe" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", marginBottom: 8 }}>📐 Tehnički crtež perforacije</div>
-          {crtezLink ? (
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <a href={crtezLink} target="_blank" rel="noopener" style={{ color: "#7c3aed", fontSize: 12 }}>Otvori crtež ↗</a>
-              <button onClick={() => setCrtezLink(null)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #fecaca", background: "#fef2f2", color: "#ef4444", fontSize: 11, cursor: "pointer" }}>✕ Ukloni</button>
-            </div>
-          ) : (
-            <label style={{ cursor: "pointer" }}>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) uploadCrtez(e.target.files[0]); }} />
-              <div style={{ padding: "10px 14px", borderRadius: 6, border: "2px dashed #c4b5fd", textAlign: "center", fontSize: 12, color: "#7c3aed" }}>
-                {uploading ? "⏳ Upload..." : "+ Dodaj tehnički crtež (PDF/JPG/PNG)"}
-              </div>
-            </label>
-          )}
-        </div>
-
         <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <div><label style={lbl}>Napomena</label><textarea style={{ ...inp, height: 50, resize: "vertical" }} value={napomena} onChange={e => setNapomena(e.target.value)} /></div>
           <div><label style={lbl}>Napomene operatera</label><textarea style={{ ...inp, height: 50, resize: "vertical" }} value={napOperatera} onChange={e => setNapOperatera(e.target.value)} /></div>
@@ -132,61 +85,75 @@ export default function NalogPerforacija({ nalog, onClose, msg }) {
       <div ref={printRef} style={{ background: "#fff", width: "210mm", minHeight: "297mm", margin: "0 auto", padding: "12mm 10mm", fontFamily: "'Segoe UI', system-ui, sans-serif", fontSize: 11, color: "#0f172a", boxSizing: "border-box" }}>
 
         {/* ZAGLAVLJE */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 10, borderBottom: "3px solid #8b5cf6", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 10, borderBottom: "3px solid #059669", marginBottom: 12 }}>
           <div>
             <img src={LOGO_B64} alt="Maropack" style={{ height: 40, objectFit: "contain" }} />
             <div style={{ fontSize: 9, color: "#64748b", marginTop: 3 }}>Fleksibilna ambalaža · Rakovac · Srbija</div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#8b5cf6" }}>NALOG ZA PERFORACIJU</div>
-            <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>🔵 Nalog za operaciju perforacije</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#059669" }}>NALOG ZA PROIZVODNJU</div>
+            <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>🛍️ Kesičarski nalog</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 10, color: "#64748b" }}>RB naloga:</div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#8b5cf6" }}>{nalog.ponBr || "—"}</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#059669" }}>{nalog.ponBr || "—"}</div>
             <div style={{ fontSize: 9, color: "#64748b", marginTop: 3 }}>Datum: <b>{datumPor}</b></div>
             <div style={{ fontSize: 9, color: "#64748b" }}>Isporuka: <b>{datumIsp || "—"}</b></div>
           </div>
         </div>
 
-        {/* KUPAC, NAZIV */}
+        {/* KUPAC, NAZIV, MATERIJAL */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8 }}>
           <div style={field}><div style={fieldLabel}>Kupac</div><div style={fieldVal}>{nalog.kupac || "—"}</div></div>
-          <div style={field}><div style={fieldLabel}>Naziv proizvoda</div><div style={{ ...fieldVal, fontSize: 11 }}>{nalog.prod || nalog.naziv || "—"}</div></div>
+          <div style={field}><div style={fieldLabel}>Naziv proizvoda</div><div style={{ ...fieldVal, fontSize: 11 }}>{nalog.prod || kesa.naziv || "—"}</div></div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            <div style={field}><div style={fieldLabel}>Br. porudžbine</div><div style={fieldVal}>{brPor || "—"}</div></div>
-            <div style={field}><div style={fieldLabel}>Datum isporuke</div><div style={fieldVal}>{datumIsp || "—"}</div></div>
+            <div style={field}><div style={fieldLabel}>Materijal</div><div style={fieldVal}>{kesa.materijal || "—"}</div></div>
+            <div style={field}><div style={fieldLabel}>Idealna šir. mat.</div><div style={fieldVal}>{kesa.sirina ? Math.round(+kesa.sirina * (kesa.ban || 1) + 20) + " mm" : "—"}</div></div>
           </div>
         </div>
 
-        {/* MATERIJALI */}
+        {/* TEHNIČKE DIMENZIJE KESE */}
         <div style={{ ...field, marginBottom: 8 }}>
-          <div style={{ ...fieldLabel, color: "#8b5cf6", marginBottom: 6 }}>🧪 Materijali koji se perforiraju</div>
-          {mats.length > 0 ? mats.map((m, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "4px 0", borderBottom: i < mats.length - 1 ? "1px solid #f1f5f9" : "none" }}>
-              <div style={{ width: 20, height: 20, borderRadius: 4, background: BOJE[i], color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{SLOJ[i]}</div>
-              <div style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{m.tip}</div>
-              <div style={{ fontSize: 11, color: "#64748b" }}>{m.deb}µ</div>
-              <div style={{ fontSize: 11, color: "#64748b" }}>{m.tg ? (+m.tg).toFixed(2) + " g/m²" : ""}</div>
-            </div>
-          )) : <div style={{ color: "#94a3b8", fontSize: 11 }}>—</div>}
+          <div style={{ ...fieldLabel, color: "#059669", marginBottom: 8 }}>📐 Tehničke dimenzije kese</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 5 }}>
+            {[
+              ["Širina mm", kesa.sirina || "—"],
+              ["Dužina mm", kesa.duzina || "—"],
+              ["Klapna mm", kesa.klapna || "0"],
+              ["Duplofan traka", kesa.duplofan || "—"],
+              ["Eurozumba", DA_NE(kesa.eurozumba !== "NE" && kesa.eurozumba)],
+              ["Okrugla zumba", DA_NE(kesa.okrugla_zumba !== "NE" && kesa.okrugla_zumba)],
+              ["Var na dnu", DA_NE(kesa.var_dno)],
+              ["Falta na dnu", DA_NE(kesa.falta)],
+              ["Perforacija", DA_NE(kesa.perforacija)],
+              ["Poprecni var", DA_NE(kesa.poprecni_var)],
+              ["Pak. za hranu", DA_NE(kesa.pakovanje_za_hranu)],
+              ["Anleger", kesa.anleger || "—"],
+              ["Takta/min", kesa.takta || "—"],
+              ["Ban", kesa.ban || "1"],
+              ["Štampa", kesa.stampa || "Bez štampe"],
+              ["Tolerancija", kesa.tolerancija || "—"],
+            ].map(x => (
+              <div key={x[0]} style={{ ...field, padding: "4px 6px" }}>
+                <div style={{ ...fieldLabel, fontSize: 8 }}>{x[0]}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: x[1] === "DA" ? "#059669" : x[1] === "NE" ? "#94a3b8" : "#0f172a" }}>{x[1]}</div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* SPECIFIKACIJA PERFORACIJE */}
+        {/* KOLIČINE I VREME */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
           <div style={{ ...field }}>
-            <div style={{ ...fieldLabel, color: "#8b5cf6", marginBottom: 6 }}>🔵 Specifikacija perforacije</div>
+            <div style={{ ...fieldLabel, color: "#1d4ed8", marginBottom: 6 }}>📊 Količine</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
               {[
-                ["Oblik perforacije", oblikPerf || "—"],
-                ["Orijentacija", orijPerf],
-                ["Dimenzije", dimPerf || "—"],
-                ["Razmak mm", razmakPerf || "—"],
-                ["Širina trake mm", nalog.sir || "—"],
-                ["Br. traka po širini", brTraka || "—"],
-                ["Smer odmotavanja", smerOdm],
-                ["Unutr. prečnik hilzne", hilzna],
-                ["Prečnik fin. rolne", precnikRolne || "—"],
+                ["Poručena kol. kom", nalog.kol ? (+nalog.kol).toLocaleString() : "—"],
+                ["Količina za rad kom", nalog.kol ? Math.round(+nalog.kol * 1.1).toLocaleString() : "—"],
+                ["Poručena kol. m", res.kolM || "—"],
+                ["Metara za rad", res.kolM ? Math.round(res.kolM * 1.1) : "—"],
+                ["Potrebno kg mat.", res.ukKg ? (+res.ukKg).toFixed(1) : "—"],
+                ["Br. porudžbine", brPor || "—"],
               ].map(x => (
                 <div key={x[0]} style={{ ...field, padding: "4px 7px" }}>
                   <div style={fieldLabel}>{x[0]}</div>
@@ -195,56 +162,78 @@ export default function NalogPerforacija({ nalog, onClose, msg }) {
               ))}
             </div>
           </div>
-
-          <div>
-            {/* Količine */}
-            <div style={{ ...field, marginBottom: 6 }}>
-              <div style={{ ...fieldLabel, color: "#1d4ed8", marginBottom: 6 }}>📊 Količine</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
-                {[
-                  ["Poručena kol. m", nalog.kol ? (+nalog.kol).toLocaleString() + " m" : "—"],
-                  ["Količina za rad m", nalog.kol ? Math.round(+nalog.kol * 1.1).toLocaleString() + " m" : "—"],
-                  ["Potrebno kg", res.ukK ? (+res.ukK * (nalog.nal || 1)).toFixed(1) + " kg" : "—"],
-                ].map(x => (
-                  <div key={x[0]} style={{ ...field, padding: "4px 7px" }}>
-                    <div style={fieldLabel}>{x[0]}</div>
-                    <div style={{ ...fieldVal, fontSize: 11 }}>{x[1]}</div>
-                  </div>
-                ))}
-              </div>
+          <div style={{ ...field }}>
+            <div style={{ ...fieldLabel, color: "#f59e0b", marginBottom: 6 }}>⏱️ Vreme izrade</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
+              {[
+                ["Takta / min", kesa.takta || "—"],
+                ["Ban", kesa.ban || "1"],
+                ["Vreme podešavanja h", "1"],
+                ["Ukupno vreme h", vremeIzrade],
+                ["Datum podešavanja", "________________"],
+                ["Od / Do h", "_____ / _____"],
+              ].map(x => (
+                <div key={x[0]} style={{ ...field, padding: "4px 7px" }}>
+                  <div style={fieldLabel}>{x[0]}</div>
+                  <div style={{ ...fieldVal, fontSize: 11 }}>{x[1]}</div>
+                </div>
+              ))}
             </div>
-
-            {/* Tehnički crtež */}
-            <div style={{ ...field, border: "1.5px dashed #c4b5fd", minHeight: 120, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
-              {crtezLink ? (
-                <img src={crtezLink} alt="Crtez" style={{ maxWidth: "100%", maxHeight: 150, objectFit: "contain" }} />
-              ) : (
-                <>
-                  <div style={{ fontSize: 24, color: "#c4b5fd" }}>📐</div>
-                  <div style={{ fontSize: 10, color: "#94a3b8", textAlign: "center" }}>Tehnički crtež perforacije</div>
-                </>
-              )}
+            <div style={{ marginTop: 8 }}>
+              <div style={{ ...fieldLabel, marginBottom: 4 }}>Početak izrade: ________________________</div>
+              <div style={{ ...fieldLabel, marginBottom: 4 }}>Završetak izrade: _______________________</div>
+              <div style={{ ...fieldLabel }}>Ukupno radnih sati: _________ Efektivni rad: _________</div>
             </div>
+          </div>
+        </div>
+
+        {/* PAKOVANJE */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8 }}>
+          <div style={field}><div style={fieldLabel}>Pakovanje</div><div style={fieldVal}>{pakovanje || "—"}</div></div>
+          <div style={field}><div style={fieldLabel}>Dim. kutije / prečnik rolne</div><div style={fieldVal}>{dimKutije || "—"}</div></div>
+          <div style={field}><div style={fieldLabel}>Paletno pakovanje</div><div style={fieldVal}>{paletno || "—"}</div></div>
+        </div>
+
+        {/* ŠKART */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 8 }}>
+          <div style={{ ...field, borderLeft: "3px solid #ef4444" }}>
+            <div style={{ ...fieldLabel, color: "#991b1b" }}>Škart štampe/laminacije</div>
+            <div style={{ height: 16, borderBottom: "1px dashed #cbd5e1" }} />
+          </div>
+          <div style={{ ...field, borderLeft: "3px solid #f59e0b" }}>
+            <div style={{ ...fieldLabel, color: "#92400e" }}>Tehnološki škart</div>
+            <div style={{ height: 16, borderBottom: "1px dashed #cbd5e1" }} />
+          </div>
+          <div style={{ ...field, borderLeft: "3px solid #64748b" }}>
+            <div style={{ ...fieldLabel }}>Ukupan škart</div>
+            <div style={{ height: 16, borderBottom: "1px dashed #cbd5e1" }} />
           </div>
         </div>
 
         {/* NAPOMENA */}
         <div style={{ marginBottom: 8 }}>
-          <div style={{ ...field, borderLeft: "3px solid #8b5cf6" }}>
-            <div style={{ ...fieldLabel, color: "#6d28d9" }}>Napomena</div>
-            <div style={{ fontSize: 11, minHeight: 20 }}>{napomena || "—"}</div>
+          <div style={{ ...field, borderLeft: "3px solid #f59e0b" }}>
+            <div style={{ ...fieldLabel, color: "#92400e" }}>Napomena</div>
+            <div style={{ fontSize: 10, minHeight: 20 }}>{napomena}</div>
+          </div>
+        </div>
+
+        {/* DUŽNOST RADNIKA */}
+        <div style={{ marginBottom: 8, padding: "6px 9px", background: "#fffbeb", borderRadius: 6, border: "1px solid #fde68a" }}>
+          <div style={{ fontSize: 8, color: "#92400e", lineHeight: 1.5 }}>
+            Dužnost svih radnika koji učestvuju u izradi radnog naloga jeste da linija bude oslobođena nečistoća i stranih tela, da se redovno i bez izuzetka: proveravaju dimenzije, vrši proba na kidanje, kontroliše vizuelni izgled proizvoda, položaj štampe, kvalitet perforacije, kvalitet poprečnog vara.
           </div>
         </div>
 
         {/* ZASTOJI */}
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Zastoji na mašini</div>
-          {[1, 2, 3].map(i => (
-            <div key={i} style={{ display: "flex", gap: 10, marginBottom: 4, fontSize: 10, alignItems: "center" }}>
-              <span style={{ color: "#94a3b8", width: 40 }}>Od/do:</span>
-              <div style={{ flex: 1, borderBottom: "1px dashed #cbd5e1", height: 16 }} />
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} style={{ display: "flex", gap: 10, marginBottom: 3, fontSize: 9, alignItems: "center" }}>
+              <span style={{ color: "#94a3b8", width: 35, flexShrink: 0 }}>Od/do:</span>
+              <div style={{ width: 80, borderBottom: "1px dashed #cbd5e1", height: 14 }} />
               <span style={{ color: "#94a3b8" }}>Razlog:</span>
-              <div style={{ flex: 2, borderBottom: "1px dashed #cbd5e1", height: 16 }} />
+              <div style={{ flex: 1, borderBottom: "1px dashed #cbd5e1", height: 14 }} />
             </div>
           ))}
         </div>
@@ -252,7 +241,7 @@ export default function NalogPerforacija({ nalog, onClose, msg }) {
         {/* NAPOMENE OPERATERA */}
         <div style={{ marginBottom: 10 }}>
           <div style={{ ...field, borderLeft: "3px solid #94a3b8" }}>
-            <div style={fieldLabel}>Napomene operatera · Proizvedena količina: ______________________</div>
+            <div style={fieldLabel}>Napomene operatera</div>
             <div style={{ fontSize: 10, minHeight: 20, color: "#64748b" }}>{napOperatera || ""}</div>
           </div>
         </div>

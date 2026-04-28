@@ -1,19 +1,8 @@
-import { supabase } from "./supabase";
+# Supabase Configuration
+# Kopiraj ovaj fajl kao .env i popuni sa svojim kredencijalima
 
-export async function izvrsiFormatiranje(rola, plan) {
- const delovi = plan.split("+").map(x => Number(x.trim()));
+VITE_SUPABASE_URL=https://tvoj-projekt.supabase.co
+VITE_SUPABASE_ANON_KEY=tvoj-anon-key-ovde
 
- await supabase.from("magacin")
-   .update({ status: "Formatirano" })
-   .eq("id", rola.id);
-
- const nove = delovi.map((sirina, i) => ({
-   parent_rola_id: rola.id,
-   operacija: "formatiranje",
-   sirina,
-   metraza: rola.metraza,
-   br_rolne: rola.br_rolne + "-" + (i+1)
- }));
-
- await supabase.from("magacin").insert(nove);
-}
+# Dobićeš ove kredencijale iz Supabase Dashboard > Settings > API
+# VAŽNO: Ne commituj .env u Git!

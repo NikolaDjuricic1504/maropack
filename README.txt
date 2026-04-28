@@ -1,18 +1,13 @@
-FULL SISTEM PROIZVODNJE
+// PracenjeNaloga.jsx - PLACEHOLDER
+// Praćenje naloga uživo
 
-SADRŽI:
-✔ Formatiranje sa QR
-✔ Plan rezanja odvojen
-✔ QR kontrolu
-✔ Zaključavanje proizvodnje
-✔ Praćenje radnika
-✔ Dashboard proizvodnje
-
-KORACI:
-1. Pokreni database.sql u Supabase
-2. Ubaci sve .js/.jsx fajlove u projekat
-3. Importuj gde treba (App.jsx / Nalog)
-4. Deploy
-
-NAPOMENA:
-Formatiranje i rezanje su ODVOJENI procesi.
+export default function PracenjeNaloga({ db, setDb, card, inp, lbl, msg, user, TIP_BOJA, TIP_LAB }) {
+  return (
+    <div style={card}>
+      <h2>🔴 Praćenje naloga</h2>
+      <p style={{color:"#64748b"}}>
+        NAPOMENA: Uploaduj mi PracenjeNaloga.jsx za kompletan prikaz.
+      </p>
+    </div>
+  );
+}

@@ -1,39 +1,67 @@
-export function parseUpit(text) {
-  const safeText = text || "";
-  const lower = safeText.toLowerCase();
+import React, { useState } from "react";
+import DashboardProizvodnja from "./DashboardProizvodnja.jsx";
+import AIponuda from "./AIponuda.jsx";
+import AIPackingLista from "./AIPackingLista.jsx";
+import BazaProizvoda from "./BazaProizvoda.jsx";
 
-  const sirinaMatch = safeText.match(/(\d{2,4})\s?(mm|milimetara)/i);
-  const dimMatch = safeText.match(/(\d{2,4})\s?[x×]\s?(\d{2,4})/i);
-  const kgMatch = safeText.match(/(\d+(?:[.,]\d+)?)\s?kg/i);
-  const komMatch = safeText.match(/(\d+(?:[.,]\d+)?)\s?(kom|komada|pcs)/i);
-  const m2Match = safeText.match(/(\d+(?:[.,]\d+)?)\s?(m2|m²)/i);
+function Placeholder({ title }) {
+  return (
+    <div className="card">
+      <h2>{title}</h2>
+      <p>Ovaj deo je spreman kao mesto za tvoj postojeći modul.</p>
+    </div>
+  );
+}
 
-  let materijal = "NEPOZNATO";
-  if (lower.includes("triplex")) materijal = "TRIPLEX";
-  else if (lower.includes("duplex")) materijal = "DUPLEX";
-  else if (lower.includes("bopp")) materijal = "BOPP";
-  else if (lower.includes("cpp")) materijal = "CPP";
-  else if (lower.includes("pet")) materijal = "PET";
-  else if (lower.includes("papir") || lower.includes("paper")) materijal = "PAPIR";
-  else if (lower.includes("alu") || lower.includes("alumin")) materijal = "ALU";
-  else if (lower.includes("pe")) materijal = "PE";
+const pages = [
+  ["dashboard", "Dashboard"],
+  ["aiPonuda", "AI ponuda"],
+  ["aiPacking", "AI packing lista"],
+  ["radniNalog", "Radni nalog"],
+  ["kalkulacije", "Kalkulacije"],
+  ["magacin", "Magacin"],
+  ["rezanje", "Plan rezanja"]
+];
 
-  let tip = "FOLIJA";
-  if (lower.includes("kesa") || lower.includes("kese")) tip = "KESA";
-  if (lower.includes("spulna") || lower.includes("špulna")) tip = "ŠPULNA";
+export default function App() {
+  const [page, setPage] = useState("aiPonuda");
 
-  return {
-    kupac: "",
-    tip,
-    materijal,
-    sirina: sirinaMatch ? Number(sirinaMatch[1].replace(",", ".")) : "",
-    dimenzijaSirina: dimMatch ? Number(dimMatch[1]) : "",
-    dimenzijaVisina: dimMatch ? Number(dimMatch[2]) : "",
-    kolicinaKg: kgMatch ? Number(kgMatch[1].replace(",", ".")) : "",
-    kolicinaKom: komMatch ? Number(komMatch[1].replace(",", ".")) : "",
-    kolicinaM2: m2Match ? Number(m2Match[1].replace(",", ".")) : "",
-    stampa: lower.includes("stampa") || lower.includes("štampa") || lower.includes("print"),
-    perforacija: lower.includes("perforacija") || lower.includes("perforirano"),
-    napomena: safeText
+  const renderPage = () => {
+    switch (page) {
+      case "dashboard": return <DashboardProizvodnja />;
+      case "aiPonuda": return <AIponuda />;
+      case "aiPacking": return <AIPackingLista />;
+      case "radniNalog": return <Placeholder title="Radni nalog" />;
+      case "kalkulacije": return <Placeholder title="Kalkulacije" />;
+      case "magacin": return <Placeholder title="Magacin" />;
+      case "rezanje": return <Placeholder title="Plan rezanja" />;
+      default: return <AIponuda />;
+    }
   };
+
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <div className="logo">MAROPACK</div>
+        <div className="sub">AI ponude • packing liste • nalozi</div>
+        {pages.map(([key, label]) => (
+          <button
+            key={key}
+            className={"nav " + (page === key ? "active" : "")}
+            onClick={() => setPage(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </aside>
+
+      <main className="main">
+        <div className="card">
+          <h1>Maropack AI sistem</h1>
+          <p><span className="badge">BUILD OK</span> Fajlovi su ispravno razdvojeni.</p>
+        </div>
+        {renderPage()}
+      </main>
+    </div>
+  );
 }

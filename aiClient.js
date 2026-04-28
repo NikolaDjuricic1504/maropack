@@ -1,23 +1,19 @@
-// aiClient.js - zajednički AI klijent za celu React aplikaciju
-// Koristi ga iz bilo kog modula: kalkulacije, magacin, ponude, radni nalozi...
+export async function acceptPlan(supabase, rola, plan) {
 
-export async function pitajGemini({ modul = "opsti", poruka = "", podaci = {} }) {
-  const response = await fetch("/api/gemini", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ modul, poruka, podaci })
-  });
+  const planText = plan.rezovi.join(" + ");
 
-  let data = null;
-  try {
-    data = await response.json();
-  } catch (e) {
-    throw new Error("Server nije vratio JSON odgovor.");
-  }
+  await supabase.from("planovi_secenja").insert([{
+    rola_id: rola.id,
+    broj_rolne: rola.broj,
+    lokacija: rola.lokacija,
+    lot: rola.lot,
+    plan: planText,
+    otpad_mm: plan.otpad
+  }]);
 
-  if (!response.ok) {
-    throw new Error(data?.error || "Greška pri pozivu Gemini API-ja.");
-  }
+  const novaMetraza = rola.metraza - plan.ukupno_uzeto_m;
 
-  return data;
+  await supabase.from("magacin")
+    .update({metraza:novaMetraza, status:"Rezervisano"})
+    .eq("id",rola.id);
 }

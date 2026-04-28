@@ -1,30 +1,62 @@
-// supabase.js - Konfiguracija za Supabase bazu
-import { createClient } from '@supabase/supabase-js';
+const CENE_PO_KG = {
+  BOPP: 2.6,
+  CPP: 2.7,
+  PET: 3.1,
+  PE: 2.4,
+  ALU: 8.5,
+  PAPIR: 1.9,
+  DUPLEX: 3.2,
+  TRIPLEX: 4.2,
+  NEPOZNATO: 3.0
+};
 
-// ========================================
-// ZAMENI OVE 2 VREDNOSTI:
-// ========================================
-// 1. Otvori: https://database.supabase.com
-// 2. Uloguj se
-// 3. Klikni: Settings (zupčanik dole levo) → API
-// 4. Kopiraj "Project URL" i stavi ga u liniju 14
-// 5. Kopiraj "anon / public key" i stavi ga u liniju 15
+export function izracunajCenu(data) {
+  const sirina = Number(data?.sirina || data?.dimenzijaSirina || 500);
+  const visina = Number(data?.dimenzijaVisina || 1000);
+  const kom = Number(data?.kolicinaKom || 0);
+  const kgUneto = Number(data?.kolicinaKg || 0);
+  const m2Uneto = Number(data?.kolicinaM2 || 0);
 
-const supabaseUrl = 'https://xmlnvxzdytuybguirjgz.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtbG52eHpkeXR1eWJndWlyamd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODA4OTUsImV4cCI6MjA5MjI1Njg5NX0.KnKwY_UXiUj5VwcoYQ-hLdSy4UaQdj_KwbiPdbgXKzg';
+  const gramaza =
+    data?.materijal === "TRIPLEX" ? 120 :
+    data?.materijal === "DUPLEX" ? 90 :
+    75;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const cenaKg = CENE_PO_KG[data?.materijal] || CENE_PO_KG.NEPOZNATO;
 
-// ========================================
-// PRIMER KAKO TREBA DA IZGLEDA:
-// ========================================
-// const supabaseUrl = 'https://abcdefghijk.supabase.co';
-// const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiY2RlZmdoaWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUwMDAwMDAsImV4cCI6MTk2MDU3NjAwMH0.EXAMPLE_SIGNATURE';
+  let m2 = m2Uneto;
+  if (!m2 && kom > 0) {
+    m2 = (sirina / 1000) * (visina / 1000) * kom;
+  }
 
-// ========================================
-// NAPOMENA:
-// ========================================
-// - Project URL počinje sa "https://" i završava sa ".supabase.co"
-// - anon key je DUGA vrednost koja počinje sa "eyJ"
-// - NE DELJI anon key javno - to je tvoj API ključ!
-// ========================================
+  let kg = kgUneto;
+  if (!kg && m2 > 0) {
+    kg = (m2 * gramaza) / 1000;
+  }
+
+  if (!m2 && kg > 0) {
+    m2 = (kg * 1000) / gramaza;
+  }
+
+  const materijal = kg * cenaKg;
+  const proizvodnja = kg * 0.45;
+  const stampa = data?.stampa ? kg * 0.35 : 0;
+  const perforacija = data?.perforacija ? kg * 0.12 : 0;
+  const ukupno = materijal + proizvodnja + stampa + perforacija;
+
+  return {
+    sirina,
+    visina,
+    gramaza,
+    cenaKgMaterijala: cenaKg,
+    m2,
+    kg,
+    materijal,
+    proizvodnja,
+    stampa,
+    perforacija,
+    ukupno,
+    cenaKom: kom > 0 ? ukupno / kom : 0,
+    cenaKgUkupno: kg > 0 ? ukupno / kg : 0
+  };
+}

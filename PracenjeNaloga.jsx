@@ -1,481 +1,514 @@
-import { useState, useEffect } from "react";
+// PackingListParser.jsx - AI Parser za sve formate packing lista
+import { useState } from "react";
 import { supabase } from "./supabase.js";
 
-var IKONE = {
-  "Nalog za materijal":"📦","Nalog za stampu":"🖨️","Nalog za kasiranje":"🔗",
-  "Nalog za rezanje":"✂️","Nalog za perforaciju":"🔵","Nalog za lakiranje":"✨","Nalog za spulne":"🔄",
-};
+// 📋 HARDCODED PARSERS za poznate formate (brzi i pouzdani)
 
-var ZASTOJI = ["Kvar masine","Nema materijala","Ceka prethodni nalog","Promena podesavanja","Pauza radnika","Ostalo"];
-
-function fmt(sec) {
-  var h=Math.floor(sec/3600); var m=Math.floor((sec%3600)/60); var s=sec%60;
-  return (h>0?h+"h ":"")+m+"min"+(h===0?" "+String(s).padStart(2,"0")+"s":"");
+// 1. PLASTCHIM-T / ROSSELLA Parser
+function parsePlastchim(text) {
+  var rolne = [];
+  
+  // 🔧 FIX: Ignoriši fakturu - traži samo "Packing list" sekciju
+  var packingStartIndex = text.indexOf("Packing list");
+  if (packingStartIndex > 0) {
+    text = text.substring(packingStartIndex);
+    console.log("✂️ Skipped invoice section, reading only packing list");
+  }
+  
+  var lines = text.split("\n");
+  var currentPallet = "";
+  var currentOrder = "";
+  
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    
+    // Skip header lines
+    if (line.includes("Packing list Date:") || 
+        line.includes("Order No:") || 
+        line.includes("Customer:") ||
+        line.includes("PRODUCT:") ||
+        line.includes("TARIC CODE:") ||
+        line.includes("Roll No") ||
+        line.includes("Film Type") ||
+        line.includes("Total Net Weight") ||
+        line.includes("Total Gross Weight") ||
+        line.includes("Total Roll Count")) {
+      
+      // Extract Order Number
+      if (line.includes("Order No:")) {
+        var orderMatch = line.match(/Order No:\s*(\d+)/);
+        if (orderMatch) currentOrder = orderMatch[1];
+      }
+      continue;
+    }
+    
+    // Pallet line: "Pallet: 136180.1 Net weight: 614.00; Gross weight: 670.00; Pallet size: 1700 x 800"
+    if (line.match(/Pallet:\s*([\d.]+)/)) {
+      currentPallet = line.match(/Pallet:\s*([\d.]+)/)[1];
+      continue;
+    }
+    
+    // Net/Gross weight summary lines - skip
+    if (line.match(/^Net Weight:|^Gross Weight:/)) {
+      continue;
+    }
+    
+    // Roll data line: "7553927 136180.1 FXC 15 1 560 152 780 28 400 614.00 649.00"
+    // Format: RollNo PalletRef FilmType Thickness Width ID OD Length NetKg GrossKg
+    var rollMatch = line.match(/^(\d{7,9})\s+[\d.]+\s+([A-Z]+)\s+(\d{1,3})\s+(\d{3,4})\s+\d+\s+\d+\s+([\d\s,]+)\s+([\d.]+)\s+([\d.]+)/);
+    
+    if (rollMatch) {
+      var rollNo = rollMatch[1];
+      var filmType = rollMatch[2] + " " + rollMatch[3]; // e.g., "FXC 15"
+      var width = parseInt(rollMatch[4]);
+      var lengthRaw = rollMatch[5].replace(/\s/g, ""); // Remove spaces
+      var length = parseInt(lengthRaw.replace(/,/g, ""));
+      var netKg = parseFloat(rollMatch[6]);
+      var grossKg = parseFloat(rollMatch[7]);
+      
+      rolne.push({
+        roll_no: rollNo,
+        tip: filmType,
+        sirina: width,
+        metraza: length,
+        kg_neto: netKg,
+        kg_bruto: grossKg,
+        palet: currentPallet,
+        lot: currentOrder,
+        dobavljac: "PLASTCHIM-T",
+        format: "Rossella"
+      });
+      
+      console.log("✅ Parsed roll:", rollNo, filmType, width + "mm", length + "m");
+    }
+  }
+  
+  console.log("📦 Total rolls parsed:", rolne.length);
+  return rolne;
 }
 
-function QRModal({nalog, onClose}) {
-  var url = window.location.origin + "?nalog=" + nalog.id;
-  var qrSrc = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=" + encodeURIComponent(url);
-  return(
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:"#fff",borderRadius:16,padding:28,maxWidth:420,width:"90%",textAlign:"center",boxShadow:"0 25px 60px rgba(0,0,0,0.3)"}}>
-        <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>{nalog.naziv}</div>
-        <div style={{fontSize:13,color:"#64748b",marginBottom:20}}>{nalog.ponBr} · {nalog.kupac}</div>
-        <div style={{border:"3px solid #1d4ed8",borderRadius:12,padding:12,marginBottom:12,display:"inline-block",background:"#fff"}}>
-          <img src={qrSrc} alt="QR kod" style={{width:180,height:180,display:"block"}}/>
-        </div>
-        <div style={{fontSize:11,color:"#94a3b8",marginBottom:6,wordBreak:"break-all",padding:"0 10px"}}>{url}</div>
-        <div style={{fontSize:11,color:"#64748b",marginBottom:16}}>Radnik skenira telefonom → START/STOP timer</div>
-        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-          <button onClick={function(){window.print();}} style={{padding:"10px 20px",borderRadius:8,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>🖨️ Štampaj</button>
-          <button onClick={onClose} style={{padding:"10px 20px",borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>Zatvori</button>
-        </div>
-      </div>
-    </div>
-  );
+// 🤖 UNIVERZALNI AI PARSER (radi za SVE formate)
+async function parsePackingListUniversal(text) {
+  try {
+    console.log("🤖 Pokrećem univerzalni AI parser...");
+    
+    var prompt = `Analiziraj ovaj packing list i ekstraktuj podatke o SVIM rolnama/reelovima.
+
+TEKST PACKING LISTE:
+${text}
+
+Traži podatke u ovim formatima:
+- Roll Number / Reel Code / Rola broj (može biti 7-9 cifara, ili kod tipa "110949959")
+- Film Type / Tip materijala (npr. FXC 15, NATIVIA NTSS 30, BOPP, CPP, PET)
+- Width / Širina u mm (npr. 1560, 740, 1650)
+- Length / Dužina u metrima (npr. 28400, 14700)
+- Net Weight / Neto kg
+- Gross Weight / Bruto kg (ako postoji)
+- Pallet Number / Broj paleta
+- LOT / Batch Number
+- Order Number / Broj narudžbine
+
+VAŽNO:
+- Ignoriši header/footer linije
+- Ignoriši ukupne sume (Total, Summary)
+- Svaka rolna je JEDAN red u tabeli
+
+Vrati JSON array gde je svaki objekat jedna rolna:
+[
+  {
+    "roll_no": "7553927",
+    "tip": "FXC 15",
+    "sirina": 1560,
+    "metraza": 28400,
+    "kg_neto": 614.00,
+    "kg_bruto": 649.00,
+    "palet": "136180.1",
+    "lot": "136180",
+    "dobavljac": "PLASTCHIM-T"
+  }
+]
+
+Vrati SAMO JSON array, bez markdown formatiranja ili dodatnog teksta.`;
+
+    var response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error("API greška: " + response.status);
+    }
+
+    var data = await response.json();
+    var content = data.content[0].text;
+    
+    console.log("📥 AI odgovor:", content.substring(0, 200));
+    
+    // Clean i parse JSON
+    var jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      console.error("❌ AI nije vratio JSON array");
+      return [];
+    }
+    
+    var parsed = JSON.parse(jsonMatch[0]);
+    
+    console.log("✅ AI parsirao:", parsed.length, "rolni");
+    
+    // Normalizuj podatke i dodaj QR kodove
+    var rolne = parsed.map(function(r, i) {
+      return {
+        roll_no: r.roll_no || r.reel_code || String(Date.now() + i).slice(-6),
+        tip: r.tip || r.film_type || "Nepoznato",
+        sirina: parseInt(r.sirina || r.width || 0),
+        metraza: parseInt(r.metraza || r.length || 0),
+        kg_neto: parseFloat(r.kg_neto || r.net_weight || 0),
+        kg_bruto: parseFloat(r.kg_bruto || r.gross_weight || r.kg_neto * 1.05 || 0),
+        palet: r.palet || r.pallet || "",
+        lot: r.lot || r.batch || r.order || "",
+        dobavljac: r.dobavljac || r.supplier || "Nepoznat",
+        br_rolne: "R-" + new Date().getFullYear() + "-" + (r.roll_no || String(Date.now() + i).slice(-6)),
+        format: "AI Universal"
+      };
+    });
+    
+    return rolne;
+    
+  } catch (e) {
+    console.error("❌ AI parsing greška:", e);
+    return [];
+  }
 }
 
-export default function PracenjeNaloga({db,setDb,card,inp,lbl,msg,user,TIP_BOJA,TIP_LAB}) {
-  var [nalozi,setNalozi]=useState([]);
-  var [zastoji,setZastoji]=useState([]);
-  var [loading,setLoading]=useState(true);
-  var [tab,setTab]=useState("live");
-  var [filterKupac,setFilterKupac]=useState("");
-  var [filterStatus,setFilterStatus]=useState("aktivni");
-  var [qrNalog,setQrNalog]=useState(null);
-  var [now,setNow]=useState(Date.now());
+// 🔍 HYBRID PARSER - Rossella first, pa AI fallback
+async function parsePackingList(text) {
+  console.log("📄 Parsing packing list...");
+  
+  // 1. Pokušaj Rossella/PLASTCHIM parser (brz)
+  var rolne = parsePlastchim(text);
+  
+  if (rolne.length > 0) {
+    console.log("✅ Rossella parser uspeo! Pronađeno:", rolne.length, "rolni");
+    
+    // Dodaj QR kodove
+    rolne.forEach(function(r, i) {
+      if (!r.br_rolne) {
+        r.br_rolne = "R-" + new Date().getFullYear() + "-" + (r.roll_no || String(Date.now() + i).slice(-6));
+      }
+    });
+    
+    return rolne;
+  }
+  
+  // 2. UNIVERZALNI AI Parser za SVE OSTALE formate
+  console.log("⚠️ Rossella parser nije našao rolne");
+  console.log("🤖 Pokrećem UNIVERZALNI AI parser...");
+  
+  rolne = await parsePackingListUniversal(text);
+  
+  if (rolne.length > 0) {
+    console.log("✅ AI Universal parser uspeo! Pronađeno:", rolne.length, "rolni");
+  } else {
+    console.error("❌ Ni jedan parser nije uspeo!");
+  }
+  
+  return rolne;
+}
 
-  useEffect(function(){loadNalozi();loadZastoji();},[]);
+// 📦 REACT KOMPONENTA
+export default function PackingListParser({ msg, card, inp, lbl }) {
+  var [loading, setLoading] = useState(false);
+  var [rolne, setRolne] = useState([]);
+  var [selected, setSelected] = useState({});
+  var [importing, setImporting] = useState(false);
 
-  useEffect(function(){
-    var t=setInterval(function(){setNow(Date.now());},1000);
-    return function(){clearInterval(t);};
-  },[]);
-
-  async function loadNalozi(){
+  // PDF Upload handler
+  async function handlePdfUpload(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    
     setLoading(true);
-    try{
-      var res=await supabase.from('nalozi').select('*').order('created_at',{ascending:false});
-      if(res.error)throw res.error;
-      setNalozi(res.data||[]);
-    }catch(e){msg("Greška: "+e.message,"err");}
+    setRolne([]);
+    
+    try {
+      // Load PDF.js
+      if (!window.pdfjsLib) {
+        var script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        await new Promise(function(res, rej) {
+          script.onload = res;
+          script.onerror = rej;
+          document.head.appendChild(script);
+        });
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      }
+      
+      // Read PDF
+      var arrayBuffer = await file.arrayBuffer();
+      var pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      var fullText = "";
+      for (var i = 1; i <= pdf.numPages; i++) {
+        var page = await pdf.getPage(i);
+        var content = await page.getTextContent();
+        var pageText = content.items.map(function(item) { return item.str; }).join(" ");
+        fullText += pageText + "\n";
+      }
+      
+      console.log("📄 PDF text extracted:", fullText.substring(0, 500));
+      
+      // Parse with hybrid parser
+      var parsed = await parsePackingList(fullText);
+      
+      if (parsed.length > 0) {
+        setRolne(parsed);
+        // Select all by default
+        var sel = {};
+        parsed.forEach(function(_, i) { sel[i] = true; });
+        setSelected(sel);
+        if (msg) msg("✅ Parsirano " + parsed.length + " rolni!");
+      } else {
+        if (msg) msg("⚠️ Nije pronađena nijedna rolna. Proverite format PDF-a.", "err");
+      }
+    } catch (e) {
+      if (msg) msg("Greška: " + e.message, "err");
+      console.error(e);
+    }
+    
     setLoading(false);
   }
 
-  async function loadZastoji(){
-    try{
-      var res=await supabase.from('nalog_zastoji').select('*').order('created_at',{ascending:false});
-      if(!res.error)setZastoji(res.data||[]);
-    }catch(e){console.error(e);}
+  // Import to Supabase
+  async function uvozUMagacin() {
+    var selectedRolne = rolne.filter(function(_, i) { return selected[i]; });
+    
+    if (selectedRolne.length === 0) {
+      if (msg) msg("Označite barem jednu rolnu!", "err");
+      return;
+    }
+    
+    setImporting(true);
+    
+    try {
+      var inserts = selectedRolne.map(function(r) {
+        return {
+          br_rolne: r.br_rolne,
+          tip: r.tip,
+          sirina: r.sirina,
+          metraza: r.metraza,
+          metraza_ost: r.metraza,
+          kg_neto: r.kg_neto,
+          kg_bruto: r.kg_bruto || r.kg_neto * 1.05,
+          lot: r.lot || "",
+          dobavljac: r.dobavljac || "",
+          palet: r.palet || "",
+          datum: new Date().toLocaleDateString("sr-RS"),
+          napomena: "Import: " + (r.format || "AI") + " parser",
+          status: "Na stanju"
+        };
+      });
+      
+      var res = await supabase.from("magacin").insert(inserts);
+      
+      if (res.error) throw res.error;
+      
+      if (msg) msg("✅ Uvezeno " + inserts.length + " rolni u magacin!");
+      
+      // Reset
+      setRolne([]);
+      setSelected({});
+    } catch (e) {
+      if (msg) msg("Greška: " + e.message, "err");
+    }
+    
+    setImporting(false);
   }
 
-  async function promeniStatus(id,status){
-    try{
-      await supabase.from('nalozi').update({status}).eq('id',id);
-      setNalozi(function(prev){return prev.map(function(n){return n.id===id?Object.assign({},n,{status}):n;});});
-    }catch(e){msg("Greška!","err");}
+  function toggleSelect(i) {
+    setSelected(function(prev) {
+      var next = Object.assign({}, prev);
+      next[i] = !next[i];
+      return next;
+    });
   }
 
-  function getElapsed(n){
-    if(!n.start_time)return 0;
-    if(n.status==="Završeno"&&n.vreme_rada)return n.vreme_rada;
-    return Math.floor((now-new Date(n.start_time).getTime())/1000);
+  function selectAll() {
+    var sel = {};
+    rolne.forEach(function(_, i) { sel[i] = true; });
+    setSelected(sel);
   }
 
-  var uToku=nalozi.filter(function(n){return n.status==="U toku";});
-  var cekaju=nalozi.filter(function(n){return n.status==="Ceka";});
-  var zavrseni=nalozi.filter(function(n){return n.status==="Završeno";});
-  var kupci=[...new Set(nalozi.map(function(n){return n.kupac;}).filter(Boolean))].sort();
+  function deselectAll() {
+    setSelected({});
+  }
 
-  var filtrirani=nalozi.filter(function(n){
-    var stOk=filterStatus==="aktivni"?n.status!=="Završeno":filterStatus==="zavrseni"?n.status==="Završeno":true;
-    return stOk&&(!filterKupac||n.kupac===filterKupac);
-  });
+  var selectedCount = Object.values(selected).filter(Boolean).length;
 
-  var poPonudi={};
-  filtrirani.forEach(function(n){
-    var k=n.ponBr||"—";
-    if(!poPonudi[k])poPonudi[k]={ponBr:k,kupac:n.kupac,prod:n.prod,tip:n.tip,nalozi:[]};
-    poPonudi[k].nalozi.push(n);
-  });
-
-  var stBg={"Ceka":"#fffbeb","U toku":"#eff6ff","Završeno":"#f0fdf4"};
-  var stCl={"Ceka":"#f59e0b","U toku":"#3b82f6","Završeno":"#059669"};
-
-  return(
+  return (
     <div>
-      {qrNalog&&<QRModal nalog={qrNalog} onClose={function(){setQrNalog(null);}}/>}
-
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
-        <h2 style={{margin:0,fontSize:20,fontWeight:800}}>🔴 Praćenje naloga</h2>
-        <div style={{display:"flex",gap:6}}>
-          {[["live","🔴 Live"],["lista","📋 Lista"],["izvestaj","📊 Izveštaj"],["zastoji","⏸️ Zastoji"]].map(function(t){
-            return <button key={t[0]} onClick={function(){setTab(t[0]);}} style={{padding:"7px 14px",borderRadius:7,border:tab===t[0]?"none":"1px solid #e2e8f0",cursor:"pointer",fontSize:12,fontWeight:700,background:tab===t[0]?"#1d4ed8":"#fff",color:tab===t[0]?"#fff":"#64748b"}}>{t[1]}</button>;
-          })}
-          <button onClick={loadNalozi} style={{padding:"7px 12px",borderRadius:7,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",cursor:"pointer",fontSize:12}}>🔄</button>
+      <div style={Object.assign({}, card, { marginBottom: 16 })}>
+        <div style={{ fontSize: 18, fontWeight: 900, marginBottom: 8 }}>
+          🤖 AI Parser Packing Lista
         </div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
+          Podržava: PLASTCHIM-T, Taghleef, Rossella i SVE OSTALE formate (AI fallback)
+        </div>
+
+        <div style={{
+          border: "2px dashed #bfdbfe",
+          borderRadius: 10,
+          padding: 24,
+          textAlign: "center",
+          background: "#f8fafc",
+          cursor: "pointer"
+        }} onClick={function() { document.getElementById("pdfInput").click(); }}>
+          <div style={{ fontSize: 48, marginBottom: 8 }}>📄</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "#1d4ed8", marginBottom: 4 }}>
+            Klikni ili prevuci PDF packing listu
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>
+            Automatski prepoznaje format i ekstraktuje rolne
+          </div>
+          <input
+            id="pdfInput"
+            type="file"
+            accept=".pdf"
+            style={{ display: "none" }}
+            onChange={handlePdfUpload}
+          />
+        </div>
+
+        {loading && (
+          <div style={{ textAlign: "center", padding: 20, color: "#1d4ed8" }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>🤖</div>
+            <div style={{ fontWeight: 700 }}>AI čita packing listu...</div>
+          </div>
+        )}
       </div>
 
-      {/* STAT */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:16}}>
-        {[["🔴",uToku.length,"U toku","#ef4444"],["⏳",cekaju.length,"Čekaju","#f59e0b"],["✅",zavrseni.length,"Završenih","#059669"],["📋",nalozi.length,"Ukupno","#1d4ed8"]].map(function(x){
-          return(
-            <div key={x[2]} style={Object.assign({},card,{borderLeft:"4px solid "+x[3],padding:"14px 16px"})}>
-              <div style={{fontSize:22,marginBottom:4}}>{x[0]}</div>
-              <div style={{fontSize:24,fontWeight:800,color:x[3]}}>{x[1]}</div>
-              <div style={{fontSize:11,color:"#64748b"}}>{x[2]}</div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* LIVE */}
-      {tab==="live"&&(
-        <div>
-          {uToku.length>0&&(
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:14,fontWeight:700,marginBottom:10,color:"#ef4444"}}>🔴 Aktivni nalozi</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>
-                {uToku.map(function(n){
-                  var el=getElapsed(n);
-                  var h=Math.floor(el/3600); var m=Math.floor((el%3600)/60); var s=el%60;
-                  var timerStr=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
-                  return(
-                    <div key={n.id} style={{background:"#fff",borderRadius:12,padding:16,border:"2px solid #bfdbfe",boxShadow:"0 2px 8px rgba(59,130,246,0.1)"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                        <div>
-                          <div style={{fontSize:16}}>{IKONE[n.naziv]||"🔧"} <b>{n.naziv}</b></div>
-                          <div style={{fontSize:12,color:"#64748b"}}>{n.ponBr} · {n.kupac}</div>
-                        </div>
-                        <span style={{background:"#eff6ff",color:"#3b82f6",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:10}}>U toku</span>
-                      </div>
-                      <div style={{fontSize:32,fontWeight:900,color:"#1d4ed8",textAlign:"center",padding:"8px 0",background:"#f0f9ff",borderRadius:8,marginBottom:10,fontVariantNumeric:"tabular-nums"}}>
-                        ⏱️ {timerStr}
-                      </div>
-                      {n.radnik&&<div style={{fontSize:12,color:"#64748b",marginBottom:8}}>👤 {n.radnik}</div>}
-                      <div style={{display:"flex",gap:6}}>
-                        <button onClick={function(){setQrNalog(n);}} style={{flex:1,padding:"7px",borderRadius:7,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>📱 QR</button>
-                        <button onClick={function(){promeniStatus(n.id,"Završeno");}} style={{flex:1,padding:"7px",borderRadius:7,border:"none",background:"#059669",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer"}}>✅ Završi</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {cekaju.length>0&&(
+      {rolne.length > 0 && (
+        <div style={Object.assign({}, card, { marginBottom: 16 })}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div>
-              <div style={{fontSize:14,fontWeight:700,marginBottom:10,color:"#f59e0b"}}>⏳ Na čekanju ({cekaju.length})</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
-                {cekaju.map(function(n){
-                  return(
-                    <div key={n.id} style={{background:"#fff",borderRadius:10,padding:"12px 14px",border:"1px solid #fde68a",display:"flex",gap:10,alignItems:"center"}}>
-                      <div style={{fontSize:20}}>{IKONE[n.naziv]||"🔧"}</div>
-                      <div style={{flex:1}}>
-                        <div style={{fontWeight:700,fontSize:13}}>{n.naziv}</div>
-                        <div style={{fontSize:11,color:"#64748b"}}>{n.ponBr} · {n.kupac}</div>
-                      </div>
-                      <div style={{display:"flex",gap:5}}>
-                        <button onClick={function(){setQrNalog(n);}} style={{padding:"5px 8px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:10,cursor:"pointer"}}>📱</button>
-                        <button onClick={function(){promeniStatus(n.id,"U toku");}} style={{padding:"5px 8px",borderRadius:6,border:"none",background:"#f59e0b",color:"#fff",fontWeight:700,fontSize:10,cursor:"pointer"}}>▶️</button>
-                      </div>
-                    </div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "#059669" }}>
+                ✅ Pronađeno {rolne.length} rolni
+              </div>
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                Parser: {rolne[0]?.format || "Unknown"}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={selectAll}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #dbe3ef",
+                  background: "#fff",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                Označi sve
+              </button>
+              <button
+                onClick={deselectAll}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 6,
+                  border: "1px solid #dbe3ef",
+                  background: "#fff",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                Poništi
+              </button>
+            </div>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
+                  <th style={{ padding: "8px", textAlign: "left" }}>✓</th>
+                  <th style={{ padding: "8px", textAlign: "left" }}>Roll No</th>
+                  <th style={{ padding: "8px", textAlign: "left" }}>Tip</th>
+                  <th style={{ padding: "8px", textAlign: "left" }}>Širina</th>
+                  <th style={{ padding: "8px", textAlign: "left" }}>Metraža</th>
+                  <th style={{ padding: "8px", textAlign: "left" }}>Kg neto</th>
+                  <th style={{ padding: "8px", textAlign: "left" }}>LOT</th>
+                  <th style={{ padding: "8px", textAlign: "left" }}>Palet</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rolne.map(function(r, i) {
+                  return (
+                    <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "8px" }}>
+                        <input
+                          type="checkbox"
+                          checked={!!selected[i]}
+                          onChange={function() { toggleSelect(i); }}
+                        />
+                      </td>
+                      <td style={{ padding: "8px", fontWeight: 700, color: "#1d4ed8" }}>
+                        {r.roll_no}
+                      </td>
+                      <td style={{ padding: "8px" }}>{r.tip}</td>
+                      <td style={{ padding: "8px" }}>{r.sirina} mm</td>
+                      <td style={{ padding: "8px", color: "#059669", fontWeight: 700 }}>
+                        {(r.metraza || 0).toLocaleString()} m
+                      </td>
+                      <td style={{ padding: "8px" }}>{r.kg_neto} kg</td>
+                      <td style={{ padding: "8px", color: "#64748b" }}>{r.lot || "—"}</td>
+                      <td style={{ padding: "8px", color: "#64748b" }}>{r.palet || "—"}</td>
+                    </tr>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {uToku.length===0&&cekaju.length===0&&(
-            <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
-              <div style={{fontSize:36,marginBottom:10}}>🎉</div>
-              <div>Nema aktivnih naloga.</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* LISTA */}
-      {tab==="lista"&&(
-        <div>
-          <div style={Object.assign({},card,{marginBottom:14,padding:"14px 16px"})}>
-            <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-              <select style={Object.assign({},inp,{width:170})} value={filterKupac} onChange={function(e){setFilterKupac(e.target.value);}}>
-                <option value="">👤 Svi kupci</option>
-                {kupci.map(function(k){return <option key={k} value={k}>{k}</option>;})}
-              </select>
-              <select style={Object.assign({},inp,{width:140})} value={filterStatus} onChange={function(e){setFilterStatus(e.target.value);}}>
-                <option value="aktivni">Aktivni</option>
-                <option value="zavrseni">Završeni</option>
-                <option value="svi">Svi</option>
-              </select>
-              <div style={{marginLeft:"auto",fontSize:12,color:"#64748b",fontWeight:600}}>{filtrirani.length} naloga</div>
-            </div>
+              </tbody>
+            </table>
           </div>
 
-          {loading?(
-            <div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>⏳ Učitavam...</div>
-          ):(
-            Object.values(poPonudi).map(function(grp){
-              var zavr=grp.nalozi.filter(function(n){return n.status==="Završeno";}).length;
-              var pct=grp.nalozi.length>0?Math.round(zavr/grp.nalozi.length*100):0;
-              return(
-                <div key={grp.ponBr} style={{marginBottom:14}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10,padding:"9px 14px",background:"#0f172a",borderRadius:"10px 10px 0 0",color:"#fff"}}>
-                    <span style={{fontWeight:800}}>{grp.ponBr}</span>
-                    <span style={{color:"#94a3b8",fontSize:12}}>{grp.kupac}</span>
-                    {grp.tip&&<span style={{background:(TIP_BOJA[grp.tip]||"#64748b")+"30",color:"#94a3b8",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:700}}>{TIP_LAB[grp.tip]||"—"}</span>}
-                    <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:12,color:"#94a3b8"}}>{zavr}/{grp.nalozi.length}</span>
-                      <div style={{width:60,height:5,background:"#334155",borderRadius:3,overflow:"hidden"}}>
-                        <div style={{height:"100%",background:"#22c55e",width:pct+"%"}}/>
-                      </div>
-                      <span style={{fontSize:11,color:"#22c55e"}}>{pct}%</span>
-                    </div>
-                  </div>
-                  <div style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:"none",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
-                    {grp.nalozi.map(function(n,i){
-                      var el=getElapsed(n);
-                      return(
-                        <div key={n.id} style={{display:"flex",gap:12,alignItems:"center",padding:"10px 14px",borderBottom:i<grp.nalozi.length-1?"1px solid #f1f5f9":"none"}}>
-                          <div style={{fontSize:18,flexShrink:0}}>{IKONE[n.naziv]||"🔧"}</div>
-                          <div style={{flex:1}}>
-                            <div style={{fontWeight:600,fontSize:13}}>{n.naziv}</div>
-                            {n.radnik&&<div style={{fontSize:11,color:"#64748b"}}>👤 {n.radnik}</div>}
-                            {n.uradjeno&&<div style={{fontSize:11,color:"#059669"}}>✓ {(+n.uradjeno).toLocaleString()} m</div>}
-                          </div>
-                          {el>0&&<div style={{fontSize:12,color:"#1d4ed8",fontWeight:700,flexShrink:0}}>⏱️ {fmt(el)}</div>}
-                          <select style={{padding:"4px 8px",borderRadius:6,border:"1px solid #e2e8f0",fontSize:11,background:stBg[n.status]||"#f8fafc",color:stCl[n.status]||"#64748b",fontWeight:700,cursor:"pointer"}}
-                            value={n.status}
-                            onChange={function(e){var v=e.target.value;promeniStatus(n.id,v);}}>
-                            <option>Ceka</option><option>U toku</option><option>Završeno</option>
-                          </select>
-                          <button onClick={function(){setQrNalog(n);}} style={{padding:"5px 10px",borderRadius:6,border:"none",background:"#1d4ed8",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",flexShrink:0}}>📱 QR</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-
-      {/* IZVESTAJ */}
-      {tab==="izvestaj"&&(
-        <div>
-          <div style={Object.assign({},card,{marginBottom:14})}>
-            <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📊 Otpad po nalogu</div>
-            {nalozi.filter(function(n){return n.status==="Završeno"&&n.skart>0;}).length===0?(
-              <div style={{textAlign:"center",padding:30,color:"#94a3b8"}}>Nema završenih naloga sa škartom.</div>
-            ):(
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead><tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                  {["Ponuda","Kupac","Nalog","Urađeno","Škart","% otpada"].map(function(h){return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;})}
-                </tr></thead>
-                <tbody>
-                  {nalozi.filter(function(n){return n.status==="Završeno"&&n.skart>0;}).map(function(n){
-                    var pct=n.uradjeno>0?((n.skart/n.uradjeno)*100).toFixed(1):0;
-                    return(
-                      <tr key={n.id} style={{borderBottom:"1px solid #f1f5f9"}}>
-                        <td style={{padding:"9px 8px",fontWeight:700,color:"#1d4ed8"}}>{n.ponBr}</td>
-                        <td style={{padding:"9px 8px"}}>{n.kupac}</td>
-                        <td style={{padding:"9px 8px",fontSize:12}}>{n.naziv}</td>
-                        <td style={{padding:"9px 8px"}}>{(n.uradjeno||0).toLocaleString()} m</td>
-                        <td style={{padding:"9px 8px",color:"#ef4444",fontWeight:600}}>{(n.skart||0).toLocaleString()} m</td>
-                        <td style={{padding:"9px 8px"}}>
-                          <span style={{background:+pct>5?"#fee2e2":"#dcfce7",color:+pct>5?"#991b1b":"#166534",borderRadius:6,padding:"2px 8px",fontWeight:700,fontSize:11}}>
-                            {pct}%
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
+          <div style={{
+            marginTop: 16,
+            padding: "12px 16px",
+            background: "#f0fdf4",
+            borderRadius: 8,
+            border: "1px solid #bbf7d0",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}>
+            <div style={{ fontSize: 13, color: "#166534", fontWeight: 700 }}>
+              Označeno: {selectedCount} / {rolne.length} rolni
+            </div>
+            <button
+              onClick={uvozUMagacin}
+              disabled={importing || selectedCount === 0}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 8,
+                border: "none",
+                background: importing || selectedCount === 0 ? "#94a3b8" : "#059669",
+                color: "#fff",
+                fontWeight: 800,
+                cursor: importing || selectedCount === 0 ? "not-allowed" : "pointer"
+              }}
+            >
+              {importing ? "⏳ Uvoz..." : "💾 Uvezi u magacin (" + selectedCount + ")"}
+            </button>
           </div>
         </div>
       )}
-
-      {/* ZASTOJI ANALIZA */}
-      {tab==="zastoji"&&(function(){
-        var zavrseniZ=zastoji.filter(function(z){return z.trajanje;});
-        var ukupnoZastoja=zavrseniZ.length;
-        var ukupnoVreme=zavrseniZ.reduce(function(s,z){return s+(z.trajanje||0);},0);
-        var prosek=ukupnoZastoja>0?ukupnoVreme/ukupnoZastoja:0;
-
-        var poRazlogu={};
-        zavrseniZ.forEach(function(z){
-          if(!poRazlogu[z.razlog])poRazlogu[z.razlog]={razlog:z.razlog,kategorija:z.kategorija,broj:0,vreme:0};
-          poRazlogu[z.razlog].broj++;
-          poRazlogu[z.razlog].vreme+=(z.trajanje||0);
-        });
-        var topRazlozi=Object.values(poRazlogu).sort(function(a,b){return b.vreme-a.vreme;});
-
-        var poKategoriji={};
-        zavrseniZ.forEach(function(z){
-          var k=z.kategorija||"Ostalo";
-          if(!poKategoriji[k])poKategoriji[k]={kat:k,broj:0,vreme:0};
-          poKategoriji[k].broj++;
-          poKategoriji[k].vreme+=(z.trajanje||0);
-        });
-        var kategorije=Object.values(poKategoriji).sort(function(a,b){return b.vreme-a.vreme;});
-
-        var poRadniku={};
-        zavrseniZ.forEach(function(z){
-          var r=z.radnik||"nepoznat";
-          if(!poRadniku[r])poRadniku[r]={radnik:r,broj:0,vreme:0};
-          poRadniku[r].broj++;
-          poRadniku[r].vreme+=(z.trajanje||0);
-        });
-        var radnici=Object.values(poRadniku).sort(function(a,b){return b.vreme-a.vreme;});
-
-        var katBoje={"Planirani":"#8b5cf6","Tehnički":"#ef4444","Materijal":"#f59e0b","Priprema":"#0891b2","Kvalitet":"#ec4899","Ostalo":"#64748b"};
-
-        return(
-          <div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12,marginBottom:16}}>
-              <div style={Object.assign({},card,{borderLeft:"4px solid #f59e0b",padding:"14px 16px"})}>
-                <div style={{fontSize:22,marginBottom:4}}>⏸️</div>
-                <div style={{fontSize:24,fontWeight:800,color:"#f59e0b"}}>{ukupnoZastoja}</div>
-                <div style={{fontSize:11,color:"#64748b"}}>Ukupno zastoja</div>
-              </div>
-              <div style={Object.assign({},card,{borderLeft:"4px solid #ef4444",padding:"14px 16px"})}>
-                <div style={{fontSize:22,marginBottom:4}}>⏱️</div>
-                <div style={{fontSize:20,fontWeight:800,color:"#ef4444"}}>{fmt(ukupnoVreme)}</div>
-                <div style={{fontSize:11,color:"#64748b"}}>Ukupno vreme zastoja</div>
-              </div>
-              <div style={Object.assign({},card,{borderLeft:"4px solid #0891b2",padding:"14px 16px"})}>
-                <div style={{fontSize:22,marginBottom:4}}>📊</div>
-                <div style={{fontSize:20,fontWeight:800,color:"#0891b2"}}>{fmt(Math.round(prosek))}</div>
-                <div style={{fontSize:11,color:"#64748b"}}>Prosečno trajanje</div>
-              </div>
-              <div style={Object.assign({},card,{borderLeft:"4px solid #8b5cf6",padding:"14px 16px"})}>
-                <div style={{fontSize:22,marginBottom:4}}>🏷️</div>
-                <div style={{fontSize:20,fontWeight:800,color:"#8b5cf6"}}>{Object.keys(poRazlogu).length}</div>
-                <div style={{fontSize:11,color:"#64748b"}}>Različitih razloga</div>
-              </div>
-            </div>
-
-            {ukupnoZastoja===0?(
-              <div style={Object.assign({},card,{textAlign:"center",padding:50,color:"#94a3b8"})}>
-                <div style={{fontSize:36,marginBottom:10}}>🎉</div>
-                <div>Nema zabeleženih zastoja!</div>
-              </div>
-            ):(
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
-                <div style={card}>
-                  <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>🏆 Top razlozi zastoja</div>
-                  {topRazlozi.slice(0,10).map(function(r,i){
-                    var pct=(r.vreme/ukupnoVreme*100).toFixed(1);
-                    var boja=katBoje[r.kategorija]||"#64748b";
-                    return(
-                      <div key={r.razlog} style={{marginBottom:10}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                          <div style={{fontSize:12,fontWeight:600}}>
-                            <span style={{color:"#94a3b8",marginRight:6,fontWeight:700}}>{i+1}.</span>
-                            {r.razlog}
-                          </div>
-                          <div style={{fontSize:11,color:"#64748b"}}>{r.broj}x · <b style={{color:boja}}>{fmt(r.vreme)}</b></div>
-                        </div>
-                        <div style={{height:6,background:"#f1f5f9",borderRadius:3,overflow:"hidden"}}>
-                          <div style={{height:"100%",background:boja,width:pct+"%"}}/>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div style={card}>
-                  <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>📂 Po kategorijama</div>
-                  {kategorije.map(function(k){
-                    var pct=(k.vreme/ukupnoVreme*100).toFixed(1);
-                    var boja=katBoje[k.kat]||"#64748b";
-                    return(
-                      <div key={k.kat} style={{marginBottom:10,padding:12,background:boja+"10",borderRadius:8,border:"1px solid "+boja+"30"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                          <div style={{fontWeight:800,fontSize:13,color:boja}}>{k.kat}</div>
-                          <div style={{fontSize:11,color:"#64748b"}}>{k.broj} zastoja</div>
-                        </div>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <div style={{fontSize:16,fontWeight:800,color:boja}}>{fmt(k.vreme)}</div>
-                          <div style={{fontSize:13,fontWeight:700,color:boja}}>{pct}%</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {radnici.length>0&&(
-              <div style={Object.assign({},card,{marginBottom:14})}>
-                <div style={{fontSize:14,fontWeight:700,marginBottom:14}}>👥 Zastoji po radniku</div>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                  <thead><tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Radnik","Broj zastoja","Ukupno vreme","Prosek"].map(function(h){return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600}}>{h}</th>;})}
-                  </tr></thead>
-                  <tbody>
-                    {radnici.map(function(r){
-                      return(
-                        <tr key={r.radnik} style={{borderBottom:"1px solid #f1f5f9"}}>
-                          <td style={{padding:"9px 8px",fontWeight:700}}>👤 {r.radnik}</td>
-                          <td style={{padding:"9px 8px"}}>{r.broj}</td>
-                          <td style={{padding:"9px 8px",color:"#ef4444",fontWeight:600}}>{fmt(r.vreme)}</td>
-                          <td style={{padding:"9px 8px",color:"#64748b"}}>{fmt(Math.round(r.vreme/r.broj))}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <div style={card}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                <div style={{fontSize:14,fontWeight:700}}>📜 Poslednji zastoji</div>
-                <button onClick={loadZastoji} style={{padding:"5px 12px",borderRadius:6,border:"1px solid #e2e8f0",background:"#fff",color:"#64748b",cursor:"pointer",fontSize:11}}>🔄 Osveži</button>
-              </div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr style={{borderBottom:"2px solid #e2e8f0"}}>
-                    {["Vreme","Nalog","Radnik","Kategorija","Razlog","Trajanje","Status"].map(function(h){return <th key={h} style={{padding:"9px 8px",textAlign:"left",color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>;})}
-                  </tr></thead>
-                  <tbody>
-                    {zastoji.slice(0,30).map(function(z){
-                      var nal=nalozi.find(function(n){return n.id===z.nalog_id;});
-                      var boja=katBoje[z.kategorija]||"#64748b";
-                      var tajming=z.start_time?new Date(z.start_time).toLocaleString("sr-RS",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
-                      return(
-                        <tr key={z.id} style={{borderBottom:"1px solid #f1f5f9"}}>
-                          <td style={{padding:"8px",color:"#64748b",whiteSpace:"nowrap"}}>{tajming}</td>
-                          <td style={{padding:"8px"}}>
-                            <div style={{fontWeight:700,color:"#1d4ed8",fontSize:11}}>{nal?nal.ponBr:"—"}</div>
-                            <div style={{fontSize:10,color:"#64748b"}}>{nal?nal.naziv:""}</div>
-                          </td>
-                          <td style={{padding:"8px"}}>👤 {z.radnik||"—"}</td>
-                          <td style={{padding:"8px"}}>
-                            <span style={{background:boja+"20",color:boja,borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{z.kategorija||"Ostalo"}</span>
-                          </td>
-                          <td style={{padding:"8px",fontWeight:600}}>{z.razlog}</td>
-                          <td style={{padding:"8px",fontWeight:700,color:boja}}>{z.trajanje?fmt(z.trajanje):"—"}</td>
-                          <td style={{padding:"8px"}}>
-                            {z.end_time?<span style={{background:"#dcfce7",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>Završen</span>
-                              :<span style={{background:"#fef3c7",color:"#92400e",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>U toku</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
