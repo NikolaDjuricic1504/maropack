@@ -1,4 +1,0 @@
-export default function Magacin({magacin,setMagacin,msg}){
-  function prijem(){ const row={id:crypto.randomUUID(),materijal:'Novi materijal',debljina:'20µ',sirina:1000,kg:1000,rezervisano:0,rolni:1,lot:'LOT-'+Math.floor(Math.random()*999)}; setMagacin([row,...magacin]); msg('Materijal dodat u magacin'); }
-  return <div className="grid"><div className="card"><button className="primary" onClick={prijem}>+ Ručni prijem materijala</button></div><table><thead><tr><th>Materijal</th><th>Debljina</th><th>Širina</th><th>Ukupno kg</th><th>Rezervisano</th><th>Slobodno</th><th>Rolni</th><th>LOT</th></tr></thead><tbody>{magacin.map(m=><tr key={m.id}><td>{m.materijal}</td><td>{m.debljina}</td><td>{m.sirina} mm</td><td>{m.kg}</td><td>{m.rezervisano}</td><td><b>{m.kg-m.rezervisano}</b></td><td>{m.rolni}</td><td>{m.lot}</td></tr>)}</tbody></table></div>
-}
